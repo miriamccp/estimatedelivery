@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Date Estimator v2.5.1 - REAL FIFO Logic</title>
+    <title>Delivery Date Estimator v2.6 - REAL FIFO Logic</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -225,7 +225,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📦 Delivery Date Estimator v2.5.1</h1>
+            <h1>📦 Delivery Date Estimator v2.6</h1>
             <p>🚀 REAL FIFO Allocation Logic - Zero Buffer Default - Fixed Flight Dates</p>
         </div>
 
@@ -326,7 +326,7 @@
 
     <script>
         // ===== GLOBAL VARIABLES =====
-        console.log('🚀 Loading REAL FIFO Delivery Estimator v2.5.1...');
+        console.log('🚀 Loading REAL FIFO Delivery Estimator v2.6...');
         
         let orderFiles = [];
         let stockFile = null;
@@ -393,16 +393,31 @@
                 }));
                 
                 const ws = XLSX.utils.json_to_sheet(excelData);
+                
+                // Auto-size columns (this works with standard SheetJS)
+                const cols = [];
+                const headers = Object.keys(excelData[0]);
+                headers.forEach((header, i) => {
+                    let maxLen = header.length;
+                    excelData.forEach(row => {
+                        const cellValue = String(row[header] || '');
+                        maxLen = Math.max(maxLen, cellValue.length);
+                    });
+                    cols.push({ width: Math.min(Math.max(maxLen + 2, 10), 50) });
+                });
+                ws['!cols'] = cols;
+                
                 XLSX.utils.book_append_sheet(wb, ws, 'Delivery Estimates');
                 
                 const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
                 const filename = `delivery_estimates_REAL_FIFO_${timestamp}.xlsx`;
                 
                 XLSX.writeFile(wb, filename);
-                log(`Results downloaded as ${filename}`);
+                log(`Basic Excel results downloaded as ${filename}`);
                 
             } catch (error) {
                 alert(`Failed to download results: ${error.message}`);
+                log(`Download error: ${error.message}`);
             }
         }
 
@@ -1316,7 +1331,7 @@
             }
 
             console.log('🎉 REAL FIFO system initialized - ready for processing!');
-            log('🚀 REAL FIFO Delivery Estimator v2.5.1 initialized successfully!');
+            log('🚀 REAL FIFO Delivery Estimator v2.6 initialized successfully!');
         });
 
         console.log('✅ REAL FIFO Script loaded - all functions available!');

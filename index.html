@@ -855,7 +855,7 @@
             const flightDatesUsedList = [];
             const flightDatesNotUsedList = [];
             
-            const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 3;
+            const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
             
             for (const flight of flights) {
                 if (!flight.arrivalDate) {
@@ -1030,7 +1030,7 @@
                 log('🚀 Starting REAL FIFO allocation logic...');
                 
                 const bufferDays = parseInt(document.getElementById('buffer-days').value) || 0;
-                const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 3;
+                const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
                 const pullingLeadDays = parseInt(document.getElementById('pulling-lead-days').value) || 2;
                 const deliveryLeadDays = parseInt(document.getElementById('delivery-lead-days').value) || 2;
                 

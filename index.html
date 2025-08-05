@@ -889,7 +889,6 @@
                     if (remainingInFlight > 0) {
                         flightDatesNotUsedList.push(`${remainingInFlight}×${formattedFlightDate} (excess)`);
                     }
-                    flight.quantity = remainingInFlight;
                     
                     if (remainingNeeded <= 0) break;
                 } else if (flight.quantity > 0) {

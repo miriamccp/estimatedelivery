@@ -860,7 +860,7 @@
             for (const flight of flights) {
                 if (!flight.arrivalDate) {
                     if (flight.quantity > 0) {
-                        flightDatesNotUsedList.push(`${flight.quantity}×${flight.originalDateString} (unparseable date)`);
+                        flightDatesNotUsedList.push(`${flight.quantity}×${flight.originalDateString}`);
                     }
                     continue;
                 }
@@ -870,7 +870,11 @@
                 if (daysFromOrder > flightBufferDays) {
                     if (flight.quantity > 0) {
                         const formattedFlightDate = formatDate(flight.arrivalDate);
-                        flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate} (>${flightBufferDays}d late)`);
+						if (flightBufferDays > 0) {
+						  flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate} (>${flightBufferDays}d late)`);
+						} else {
+						  flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate}`);
+						}
                     }
                     continue;
                 }
@@ -890,7 +894,7 @@
                         flightDatesNotUsedList.push(`${remainingInFlight}×${formattedFlightDate} (excess)`);
                     }
                     
-                    if (remainingNeeded <= 0) break;
+                  //  if (remainingNeeded <= 0) break;
                 } else if (flight.quantity > 0) {
                     const formattedFlightDate = formatDate(flight.arrivalDate);
                     flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate} (not needed)`);
@@ -968,7 +972,7 @@
                     for (const usage of usedFlightsList) {
                         for (const flight of remainingFlights[partId]) {
                             if (flight.arrivalDate && usage.date && 
-                                flight.arrivalDate.getTime() === usage.date.getTime()) {
+                                flight.arrivalDate.getTime() === usage.date.getTime() && flight.quantity > 0) {
                                 const before = flight.quantity;
                                 flight.quantity -= usage.quantityUsed;
                                 console.log(`✈️ Flight consumed: ${partId} ${formatDate(flight.arrivalDate)} ${before} -> ${flight.quantity} (-${usage.quantityUsed})`);
@@ -1164,6 +1168,23 @@
                         };
                         estimatedResults.push(estimate);
                         log(`✅ FULFILLED - Delivery: ${formatDate(deliveryDate)} (${allocation.status})`);
+						
+						// Step 1: Remove flights with quantity <= 0
+						Object.values(remainingFlights).forEach(arrivals => {
+						  for (let i = arrivals.length - 1; i >= 0; i--) {
+							if (arrivals[i].quantity <= 0) {
+							  arrivals.splice(i, 1);
+							}
+						  }
+						});
+
+						// Step 2: Remove keys where list is empty
+						Object.keys(remainingFlights).forEach(partId => {
+						  if (remainingFlights[partId].length === 0) {
+							delete remainingFlights[partId];
+						  }
+						});
+
                     } else {
                         // Cannot fulfill order
                         const estimate = {
@@ -1337,4 +1358,4 @@
         console.log('✅ REAL FIFO Script loaded - all functions available!');
     </script>
 </body>
-</html> '
+</html>

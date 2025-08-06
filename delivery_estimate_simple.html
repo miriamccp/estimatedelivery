@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Date Estimator v2.6.2- REAL FIFO Logic</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 300; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        .content { padding: 40px; }
+        .upload-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        .upload-card {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .upload-card:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+        }
+        .upload-card.has-file {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+        .upload-card h3 { color: #2c3e50; margin-bottom: 15px; font-size: 1.3em; }
+        .upload-card p { color: #6c757d; margin-bottom: 20px; line-height: 1.5; }
+        .file-input { display: none; }
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+        .file-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: #495057;
+        }
+        .config-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .config-section h3 { color: #2c3e50; margin-bottom: 20px; font-size: 1.4em; }
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .config-item { display: flex; flex-direction: column; gap: 8px; }
+        .config-item label { font-weight: 600; color: #495057; }
+        .config-item input {
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+        .config-item input:focus { outline: none; border-color: #667eea; }
+        .process-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: 600;
+            display: block;
+            margin: 30px auto;
+            transition: all 0.3s ease;
+            min-width: 200px;
+        }
+        .process-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+        }
+        .process-btn:disabled { background: #6c757d; cursor: not-allowed; transform: none; }
+        .results-section { margin-top: 40px; }
+        .results-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px 12px 0 0;
+        }
+        .results-header h3 { font-size: 1.5em; margin-bottom: 10px; }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .stat-item { text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; display: block; }
+        .stat-label { font-size: 0.9em; opacity: 0.9; }
+        .results-table {
+            background: white;
+            border-radius: 0 0 12px 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .table-container { overflow-x: auto; max-height: 600px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        th {
+            background: #f8f9fa;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        td { padding: 10px 8px; border-bottom: 1px solid #e9ecef; }
+        tr:hover { background: #f8f9fa; }
+        .status-in-stock { background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .status-flight { background: #cce7ff; color: #004085; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .status-skipped { background: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .download-section { margin-top: 30px; text-align: center; }
+        .download-btn {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(23, 162, 184, 0.3);
+        }
+        .log-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+            border-left: 4px solid #667eea;
+        }
+        .log-section h4 { color: #2c3e50; margin-bottom: 15px; }
+        .log-content {
+            background: #2c3e50;
+            color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #dc3545;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 Delivery Date Estimator v2.6</h1>
+            <p>🚀 REAL FIFO Allocation Logic - Zero Buffer Default - Fixed Flight Dates</p>
+        </div>
+
+        <div class="content">
+            <!-- File Upload Section -->
+            <div class="upload-section">
+                <div class="upload-card" id="order-card">
+                    <h3>📋 Customer Orders</h3>
+                    <p>Upload order files with pattern <code>order_*.xlsx</code><br>
+                    Contains: part no, request qty, request date, po create date, po, item</p>
+                    <input type="file" id="order-files" class="file-input" multiple accept=".xlsx,.xls">
+                    <button class="upload-btn" onclick="triggerFileInput('order-files')">
+                        📁 Select Order Files
+                    </button>
+                    <div id="order-info" class="file-info" style="display: none;"></div>
+                </div>
+
+                <div class="upload-card" id="stock-card">
+                    <h3>📦 Part Stock</h3>
+                    <p>Upload stock file <code>part_stock.xlsx</code><br>
+                    Contains: part no, qty (available stock)</p>
+                    <input type="file" id="stock-file" class="file-input" accept=".xlsx,.xls">
+                    <button class="upload-btn" onclick="triggerFileInput('stock-file')">
+                        📁 Select Stock File
+                    </button>
+                    <div id="stock-info" class="file-info" style="display: none;"></div>
+                </div>
+
+                <div class="upload-card" id="flight-card">
+                    <h3>✈️ Flight Information</h3>
+                    <p>Upload flight file <code>onflight.xlsx</code><br>
+                    Contains: part no, date (arrival), qty</p>
+                    <input type="file" id="flight-file" class="file-input" accept=".xlsx,.xls">
+                    <button class="upload-btn" onclick="triggerFileInput('flight-file')">
+                        📁 Select Flight File
+                    </button>
+                    <div id="flight-info" class="file-info" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- Configuration Section -->
+            <div class="config-section">
+                <h3>⚙️ Configuration</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="buffer-days">Buffer Days (In-Stock Orders)</label>
+                        <input type="number" id="buffer-days" value="0" min="0" max="30">
+                    </div>
+                    <div class="config-item">
+                        <label for="flight-buffer-days">Flight Buffer Days (Max Late)</label>
+                        <input type="number" id="flight-buffer-days" value="0" min="0" max="30">
+                    </div>
+                    <div class="config-item">
+                        <label for="pulling-lead-days">Pulling Lead Days</label>
+                        <input type="number" id="pulling-lead-days" value="2" min="1" max="10">
+                    </div>
+                    <div class="config-item">
+                        <label for="delivery-lead-days">Delivery Lead Days</label>
+                        <input type="number" id="delivery-lead-days" value="2" min="1" max="10">
+                    </div>
+                </div>
+            </div>
+
+            <button class="process-btn" id="process-btn" onclick="processFiles()" disabled>
+                🚀 Calculate Delivery Dates
+            </button>
+
+            <!-- Progress Bar -->
+            <div class="progress-bar" id="progress-bar" style="display: none;">
+                <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="results-section" style="display: none;">
+                <div class="results-header">
+                    <h3>📊 Results Summary</h3>
+                    <div class="summary-stats" id="summary-stats"></div>
+                </div>
+                <div class="results-table">
+                    <div class="table-container">
+                        <table id="results-table"></table>
+                    </div>
+                </div>
+                <div class="download-section">
+                    <button class="download-btn" onclick="downloadResults()">
+                        💾 Download Excel Results
+                    </button>
+                </div>
+            </div>
+
+            <!-- Log Section -->
+            <div class="log-section" id="log-section" style="display: none;">
+                <h4>📋 Processing Log</h4>
+                <div class="log-content" id="log-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== GLOBAL VARIABLES =====
+        console.log('🚀 Loading REAL FIFO Delivery Estimator v2.6...');
+        
+        let orderFiles = [];
+        let stockFile = null;
+        let flightFile = null;
+        let estimatedResults = [];
+        let processingLog = [];
+
+        const TAIWAN_2025_HOLIDAYS = [
+            '2025-01-01', '2025-01-27', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31',
+            '2025-02-28', '2025-04-03', '2025-04-04', '2025-05-01', '2025-05-30', '2025-09-29',
+            '2025-10-06', '2025-10-10', '2025-10-24', '2025-12-25'
+        ];
+
+        let currentTaiwanHolidays = [...TAIWAN_2025_HOLIDAYS];
+
+        // ===== BUTTON FUNCTIONS =====
+        function triggerFileInput(inputId) {
+            console.log(`🔥 triggerFileInput called with: ${inputId}`);
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.click();
+                log(`File input triggered: ${inputId}`);
+            } else {
+                console.error(`❌ File input not found: ${inputId}`);
+            }
+        }
+
+        function processFiles() {
+            console.log('🔥 processFiles called - REAL FIFO LOGIC');
+            processDeliveryCalculation();
+        }
+
+        function downloadResults() {
+            if (estimatedResults.length === 0) {
+                alert('No results to download. Please process files first.');
+                return;
+            }
+            
+            try {
+                const wb = XLSX.utils.book_new();
+                
+                const excelData = estimatedResults.map(estimate => ({
+                    'Order Number': estimate.orderNumber,
+                    'Cust Code': estimate.custCode,
+                    'PO': estimate.po,
+                    'Item': estimate.item,
+                    'Part ID': estimate.partId,
+                    'Required Qty': estimate.requiredQuantity,
+                    'Available Qty': estimate.availableQuantity,
+                    'Request Date': estimate.requestDate,
+                    'PO Create Date': estimate.poCreateDate,
+                    'Pulling Date': estimate.pullingDate || 'N/A',
+                    'Estimated Delivery': estimate.estimatedDeliveryDate,
+                    'Lead Time (Days)': estimate.leadTimeDays,
+                    'Status': estimate.status,
+                    'Notes': estimate.notes,
+                    'Stock Before': estimate.stockQtyBefore,
+                    'Stock After': estimate.stockQtyAfter,
+                    'Stock Used': estimate.stockUsed,
+                    'Flight Qty Used': estimate.flightQtyUsed,
+                    'Flight Dates Used': estimate.flightDatesUsed,
+                    'Flight Dates Not Used': estimate.flightDatesNotUsed,
+                    'Warehouse Notes': estimate.warehouseNotes
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                
+                // Auto-size columns (this works with standard SheetJS)
+                const cols = [];
+                const headers = Object.keys(excelData[0]);
+                headers.forEach((header, i) => {
+                    let maxLen = header.length;
+                    excelData.forEach(row => {
+                        const cellValue = String(row[header] || '');
+                        maxLen = Math.max(maxLen, cellValue.length);
+                    });
+                    cols.push({ width: Math.min(Math.max(maxLen + 2, 10), 50) });
+                });
+                ws['!cols'] = cols;
+                
+                XLSX.utils.book_append_sheet(wb, ws, 'Delivery Estimates');
+                
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+                const filename = `delivery_estimates_REAL_FIFO_${timestamp}.xlsx`;
+                
+                XLSX.writeFile(wb, filename);
+                log(`Basic Excel results downloaded as ${filename}`);
+                
+            } catch (error) {
+                alert(`Failed to download results: ${error.message}`);
+                log(`Download error: ${error.message}`);
+            }
+        }
+
+        // ===== UTILITY FUNCTIONS =====
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            processingLog.push(logMessage);
+            console.log(logMessage);
+            
+            const logSection = document.getElementById('log-section');
+            const logContent = document.getElementById('log-content');
+            if (logSection && logContent) {
+                logSection.style.display = 'block';
+                logContent.textContent = processingLog.join('\n');
+                logContent.scrollTop = logContent.scrollHeight;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.innerHTML = `<strong>Error:</strong> ${message}`;
+            document.querySelector('.content').appendChild(errorDiv);
+            setTimeout(() => errorDiv.remove(), 10000);
+            log(`ERROR: ${message}`);
+        }
+
+        function updateProgress(percentage) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressFill = document.getElementById('progress-fill');
+            if (progressBar && progressFill) {
+                progressBar.style.display = 'block';
+                progressFill.style.width = percentage + '%';
+                if (percentage >= 100) {
+                    setTimeout(() => progressBar.style.display = 'none', 1000);
+                }
+            }
+        }
+
+        function updateOrderInfo() {
+            const info = document.getElementById('order-info');
+            const card = document.getElementById('order-card');
+            if (orderFiles.length > 0) {
+                info.innerHTML = `📁 ${orderFiles.length} files selected:<br>${orderFiles.map(f => f.name).join('<br>')}`;
+                info.style.display = 'block';
+                card.classList.add('has-file');
+            } else {
+                info.style.display = 'none';
+                card.classList.remove('has-file');
+            }
+        }
+
+        function updateStockInfo() {
+            const info = document.getElementById('stock-info');
+            const card = document.getElementById('stock-card');
+            if (stockFile) {
+                info.innerHTML = `📁 ${stockFile.name}<br>Size: ${(stockFile.size / 1024).toFixed(1)} KB`;
+                info.style.display = 'block';
+                card.classList.add('has-file');
+            } else {
+                info.style.display = 'none';
+                card.classList.remove('has-file');
+            }
+        }
+
+        function updateFlightInfo() {
+            const info = document.getElementById('flight-info');
+            const card = document.getElementById('flight-card');
+            if (flightFile) {
+                info.innerHTML = `📁 ${flightFile.name}<br>Size: ${(flightFile.size / 1024).toFixed(1)} KB`;
+                info.style.display = 'block';
+                card.classList.add('has-file');
+            } else {
+                info.style.display = 'none';
+                card.classList.remove('has-file');
+            }
+        }
+
+        function checkAllFilesUploaded() {
+            const processBtn = document.getElementById('process-btn');
+            const hasFiles = orderFiles.length > 0 && stockFile && flightFile;
+            if (processBtn) {
+                processBtn.disabled = !hasFiles;
+                console.log('📋 Files check:', { orderFiles: orderFiles.length, stockFile: !!stockFile, flightFile: !!flightFile, enabled: hasFiles });
+            }
+        }
+
+        // ===== DATE FUNCTIONS =====
+        function parseDate(dateValue) {
+            if (!dateValue && dateValue !== 0) return null;
+            
+            if (typeof dateValue === 'number') {
+                const excelEpoch = new Date(1899, 11, 30);
+                const date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000);
+                return isNaN(date) ? null : date;
+            }
+            
+            const dateStr = String(dateValue).trim();
+            if (dateStr.toLowerCase().match(/^(na|n\/a|null|cancel|pending|tbd|)$/)) {
+                return null;
+            }
+            
+            if (/^\d{8}$/.test(dateStr)) {
+                const year = parseInt(dateStr.substring(0, 4));
+                const month = parseInt(dateStr.substring(4, 6)) - 1;
+                const day = parseInt(dateStr.substring(6, 8));
+                const date = new Date(year, month, day);
+                return isNaN(date) ? null : date;
+            }
+            
+            const parsed = new Date(dateStr);
+            return isNaN(parsed) ? null : parsed;
+        }
+
+        function isTaiwanWorkingDay(date) {
+            const dayOfWeek = date.getDay();
+            const dateString = formatDateLocal(date);
+            
+            if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+            if (currentTaiwanHolidays.includes(dateString)) return false;
+            
+            return true;
+        }
+
+        function formatDateLocal(date) {
+            if (!date) return 'N/A';
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDate(date) {
+            return formatDateLocal(date);
+        }
+
+        function addWorkingDays(startDate, workingDays) {
+            let current = new Date(startDate);
+            let daysAdded = 0;
+            
+            while (daysAdded < workingDays) {
+                current.setDate(current.getDate() + 1);
+                if (isTaiwanWorkingDay(current)) {
+                    daysAdded++;
+                }
+            }
+            
+            return current;
+        }
+
+        function calculateDaysBetween(startDate, endDate) {
+            const timeDiff = endDate.getTime() - startDate.getTime();
+            return Math.ceil(timeDiff / (1000 * 3600 * 24));
+        }
+
+        // ===== PART MATCHING FUNCTIONS =====
+        function isPartMatch(orderPartNo, stockPartNo) {
+            if (!orderPartNo || !stockPartNo) return false;
+            
+            const orderPart = String(orderPartNo).trim().toLowerCase();
+            const stockPart = String(stockPartNo).trim().toLowerCase();
+            
+            if (orderPart === stockPart) return true;
+            if (stockPart === orderPart + '-a') return true;
+            if (orderPart === stockPart + '-a') return true;
+            
+            return false;
+        }
+
+        function findBestMatch(orderPartId, availableParts) {
+            const partKeys = Object.keys(availableParts);
+            
+            // Try exact match first
+            if (partKeys.includes(orderPartId)) {
+                return orderPartId;
+            }
+            
+            // Try fuzzy matching for -A variants
+            for (const partKey of partKeys) {
+                if (isPartMatch(orderPartId, partKey)) {
+                    return partKey;
+                }
+            }
+            
+            return null;
+        }
+
+        // ===== FILE PROCESSING =====
+        async function readExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        resolve(workbook);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function findColumnIndex(headers, ...possibleNames) {
+            for (let i = 0; i < headers.length; i++) {
+                if (!headers[i]) continue;
+                const header = String(headers[i]).toLowerCase().trim();
+                for (const name of possibleNames) {
+                    if (header.includes(name.toLowerCase())) {
+                        return i;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        function extractCustomerCode(filename) {
+            let custCode = filename;
+            
+            if (custCode.toLowerCase().endsWith('.xlsx')) {
+                custCode = custCode.substring(0, custCode.length - 5);
+            }
+            if (custCode.toLowerCase().endsWith('.xls')) {
+                custCode = custCode.substring(0, custCode.length - 4);
+            }
+            
+            if (custCode.toLowerCase().startsWith('order_')) {
+                custCode = custCode.substring(6);
+            }
+            
+            return custCode.toUpperCase() || 'UNKNOWN';
+        }
+
+        async function loadCustomerOrders() {
+            log('Loading customer orders...');
+            const orders = [];
+            let orderNumber = 1;
+            
+            for (const file of orderFiles) {
+                try {
+                    const custCode = extractCustomerCode(file.name);
+                    log(`Processing order file: ${file.name} (Customer: ${custCode})`);
+                    
+                    const workbook = await readExcelFile(file);
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                    
+                    if (data.length < 2) continue;
+                    
+                    const headers = data[0];
+                    const partIdIndex = findColumnIndex(headers, 'part no', 'part_no', 'partno', 'partid', 'part_id');
+                    const quantityIndex = findColumnIndex(headers, 'request qty');
+                    const dateIndex = findColumnIndex(headers, 'request date');
+                    const poDateIndex = findColumnIndex(headers, 'po create date', 'order date');
+                    const poIndex = findColumnIndex(headers, 'po');
+                    const itemIndex = findColumnIndex(headers, 'item');
+                    
+                    for (let i = 1; i < data.length; i++) {
+                        const row = data[i];
+                        if (!row || row.length === 0) continue;
+                        
+                        const partId = row[partIdIndex];
+                        const quantity = parseInt(row[quantityIndex]) || 0;
+                        const dateValue = row[dateIndex];
+                        const poDate = row[poDateIndex];
+                        const po = row[poIndex] || '';
+                        const item = row[itemIndex] || '';
+                        
+                        if (partId && quantity > 0) {
+                            const requestDate = parseDate(dateValue);
+                            const originalDateString = String(dateValue || 'NULL');
+
+                            const poCreateDate = parseDate(poDate);
+                            const originalPoDateString = String(poDate || 'NULL');
+                            
+                            orders.push({
+                                orderNumber: orderNumber++,
+                                partId: String(partId),
+                                requiredQuantity: quantity,
+                                requestDate: requestDate,
+                                originalDateString: originalDateString,
+                                poCreateDate: poCreateDate,
+                                originalPoDateString: originalPoDateString,
+                                custCode: custCode,
+                                po: String(po),
+                                item: String(item),
+                                hasValidDate: function() { return this.requestDate !== null; }
+                            });
+                        }
+                    }
+                } catch (error) {
+                    log(`Error processing ${file.name}: ${error.message}`);
+                }
+            }
+            
+            log(`Loaded ${orders.length} customer orders from ${orderFiles.length} files`);
+            return orders;
+        }
+
+        async function loadPartStock() {
+            log('Loading part stock...');
+            
+            const workbook = await readExcelFile(stockFile);
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            
+            if (data.length < 2) {
+                throw new Error('Stock file appears to be empty');
+            }
+            
+            const headers = data[0];
+            const partIdIndex = findColumnIndex(headers, 'part no', 'part_no', 'partno', 'partid', 'part_id');
+            const quantityIndex = findColumnIndex(headers, 'qty', 'quantity', 'stock_qty', 'available_qty');
+            
+            const partStockMap = {};
+            
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0) continue;
+                
+                const partId = row[partIdIndex];
+                const quantity = parseInt(row[quantityIndex]) || 0;
+                
+                if (partId) {
+                    const partKey = String(partId);
+                    partStockMap[partKey] = quantity;
+                }
+            }
+            
+            log(`Loaded ${Object.keys(partStockMap).size} unique parts with stock info`);
+            return partStockMap;
+        }
+
+        async function loadFlightInfo() {
+            log('Loading flight information...');
+            
+            const workbook = await readExcelFile(flightFile);
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            
+            if (data.length < 2) {
+                throw new Error('Flight file appears to be empty');
+            }
+            
+            const headers = data[0];
+            const partIdIndex = findColumnIndex(headers, 'part no', 'part_no', 'partno', 'partid', 'part_id');
+            const arrivalDateIndex = findColumnIndex(headers, 'date', 'arrival', 'flight_date', 'arrival_date');
+            const quantityIndex = findColumnIndex(headers, 'qty', 'quantity', 'flight_qty', 'arrival_qty');
+            
+            const flightArrivalsMap = {};
+            
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0) continue;
+                
+                const partId = row[partIdIndex];
+                const dateValue = row[arrivalDateIndex];
+                const quantity = parseInt(row[quantityIndex]) || 0;
+                
+                if (partId && quantity > 0) {
+                    const arrivalDate = parseDate(dateValue);
+                    const originalDateString = String(dateValue || 'NULL');
+                    
+                    const partKey = String(partId);
+                    if (!flightArrivalsMap[partKey]) {
+                        flightArrivalsMap[partKey] = [];
+                    }
+                    
+                    flightArrivalsMap[partKey].push({
+                        partId: partKey,
+                        arrivalDate: arrivalDate,
+                        quantity: quantity,
+                        originalDateString: originalDateString
+                    });
+                }
+            }
+            
+            // Sort flight arrivals by date for each part
+            for (const arrivals of Object.values(flightArrivalsMap)) {
+                arrivals.sort((a, b) => {
+                    if (!a.arrivalDate && !b.arrivalDate) return 0;
+                    if (!a.arrivalDate) return 1;
+                    if (!b.arrivalDate) return -1;
+                    return a.arrivalDate.getTime() - b.arrivalDate.getTime();
+                });
+            }
+            
+            const totalFlightRecords = Object.values(flightArrivalsMap).reduce((sum, arr) => sum + arr.length, 0);
+            log(`Loaded ${totalFlightRecords} flight arrival records for ${Object.keys(flightArrivalsMap).size} unique parts`);
+            return flightArrivalsMap;
+        }
+
+        // ===== REAL FIFO ALLOCATION LOGIC =====
+        function tryAllocateInventory(order, availableStock, availableFlights) {
+            console.log(`🔍 Trying to allocate for ${order.partId}, qty: ${order.requiredQuantity}`);
+            
+            const stockPartId = findBestMatch(order.partId, availableStock);
+            const flightPartId = findBestMatch(order.partId, availableFlights);
+            
+            const stockOnHand = stockPartId ? (availableStock[stockPartId] || 0) : 0;
+            const flights = flightPartId ? (availableFlights[flightPartId] || []) : [];
+            
+            console.log(`📦 Stock check: ${order.partId} -> ${stockPartId} (${stockOnHand} available)`);
+            console.log(`✈️ Flight check: ${order.partId} -> ${flightPartId} (${flights.length} flights)`);
+            
+            // Check if stock alone is sufficient
+            if (stockOnHand >= order.requiredQuantity) {
+                console.log(`✅ IN STOCK: ${stockOnHand} >= ${order.requiredQuantity}`);
+                return {
+                    canFulfill: true,
+                    status: 'In Stock',
+                    notes: `Fulfilled from stock (${stockOnHand} available)`,
+                    totalAllocated: order.requiredQuantity,
+                    stockQtyBefore: stockOnHand,
+                    stockQtyUsed: order.requiredQuantity,
+                    flightQtyUsed: 0,
+                    flightDatesUsed: '',
+                    flightDatesNotUsed: flights.map(f => f.arrivalDate ? `${f.quantity}×${formatDate(f.arrivalDate)}` : `${f.quantity}×${f.originalDateString}`).join(', '),
+                    lastFlightDate: null,
+                    stockUsed: { [stockPartId || order.partId]: order.requiredQuantity },
+                    flightUsed: {}
+                };
+            }
+            
+            console.log(`🔄 Need flights: stock ${stockOnHand} < required ${order.requiredQuantity}`);
+            
+            // Need to combine stock + flights
+            let remainingNeeded = order.requiredQuantity - stockOnHand;
+            let cumulativeFlightQty = 0;
+            let lastRequiredFlight = null;
+            const usedFlights = [];
+            const flightDatesUsedList = [];
+            const flightDatesNotUsedList = [];
+            
+            const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
+            
+            for (const flight of flights) {
+                if (!flight.arrivalDate) {
+                    if (flight.quantity > 0) {
+                        flightDatesNotUsedList.push(`${flight.quantity}×${flight.originalDateString}`);
+                    }
+                    continue;
+                }
+                
+                const daysFromOrder = calculateDaysBetween(order.requestDate, flight.arrivalDate);
+                
+                if (daysFromOrder > flightBufferDays) {
+                    if (flight.quantity > 0) {
+                        const formattedFlightDate = formatDate(flight.arrivalDate);
+						if (flightBufferDays > 0) {
+						  flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate} (>${flightBufferDays}d late)`);
+						} else {
+						  flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate}`);
+						}
+                    }
+                    continue;
+                }
+                
+                const quantityToUse = Math.min(flight.quantity, remainingNeeded);
+                if (quantityToUse > 0 && remainingNeeded > 0) {
+                    usedFlights.push({ date: flight.arrivalDate, quantityUsed: quantityToUse });
+                    cumulativeFlightQty += quantityToUse;
+                    remainingNeeded -= quantityToUse;
+                    lastRequiredFlight = flight.arrivalDate;
+                    
+                    const formattedFlightDate = formatDate(flight.arrivalDate);
+                    flightDatesUsedList.push(`${quantityToUse}×${formattedFlightDate}`);
+                    
+                    const remainingInFlight = flight.quantity - quantityToUse;
+                    if (remainingInFlight > 0) {
+                        flightDatesNotUsedList.push(`${remainingInFlight}×${formattedFlightDate} (excess)`);
+                    }
+                    
+                  //  if (remainingNeeded <= 0) break;
+                } else if (flight.quantity > 0) {
+                    const formattedFlightDate = formatDate(flight.arrivalDate);
+                    flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate} (not needed)`);
+                }
+            }
+            
+            const totalAvailable = stockOnHand + cumulativeFlightQty;
+            console.log(`📊 Total available: ${totalAvailable} (stock: ${stockOnHand}, flights: ${cumulativeFlightQty})`);
+            
+            if (totalAvailable < order.requiredQuantity) {
+                console.log(`❌ INSUFFICIENT: Need ${order.requiredQuantity}, only ${totalAvailable} available`);
+                return {
+                    canFulfill: false,
+                    status: 'Skipped',
+                    notes: `Need ${order.requiredQuantity}, only ${totalAvailable} available (stock: ${stockOnHand}, flights: ${cumulativeFlightQty})`,
+                    totalAllocated: totalAvailable,
+                    stockQtyBefore: stockOnHand,
+                    stockQtyUsed: 0,
+                    flightQtyUsed: cumulativeFlightQty,
+                    flightDatesUsed: flightDatesUsedList.join(', '),
+                    flightDatesNotUsed: flightDatesNotUsedList.join(', '),
+                    lastFlightDate: lastRequiredFlight,
+                    stockUsed: {},
+                    flightUsed: {}
+                };
+            }
+            
+            // Can fulfill - determine status
+            let status, notes;
+            if (stockOnHand > 0 && cumulativeFlightQty > 0) {
+                status = 'Partial Stock + Flight';
+                notes = `Stock: ${stockOnHand}, flights: ${cumulativeFlightQty} (last: ${formatDate(lastRequiredFlight)})`;
+                console.log(`✅ PARTIAL: Stock + Flight combination`);
+            } else if (stockOnHand === 0) {
+                status = 'Awaiting Flight';
+                notes = `All from flights: ${cumulativeFlightQty} (last: ${formatDate(lastRequiredFlight)})`;
+                console.log(`✅ FLIGHT ONLY: All from flights`);
+            } else {
+                status = 'In Stock';
+                notes = `All from stock: ${stockOnHand}`;
+                console.log(`✅ STOCK ONLY: All from stock`);
+            }
+            
+            return {
+                canFulfill: true,
+                status: status,
+                notes: notes,
+                totalAllocated: order.requiredQuantity,
+                stockQtyBefore: stockOnHand,
+                stockQtyUsed: Math.min(stockOnHand, order.requiredQuantity),
+                flightQtyUsed: cumulativeFlightQty,
+                flightDatesUsed: flightDatesUsedList.join(', '),
+                flightDatesNotUsed: flightDatesNotUsedList.join(', '),
+                lastFlightDate: lastRequiredFlight,
+                stockUsed: stockOnHand > 0 ? { [stockPartId || order.partId]: Math.min(stockOnHand, order.requiredQuantity) } : {},
+                flightUsed: usedFlights.length > 0 ? { [flightPartId || order.partId]: usedFlights } : {}
+            };
+        }
+
+        function applyAllocation(allocation, remainingStock, remainingFlights) {
+            console.log(`🔄 Applying allocation...`);
+            
+            // Apply stock usage
+            for (const [partId, used] of Object.entries(allocation.stockUsed)) {
+                if (remainingStock[partId] !== undefined) {
+                    const before = remainingStock[partId];
+                    remainingStock[partId] -= used;
+                    console.log(`📦 Stock consumed: ${partId} ${before} -> ${remainingStock[partId]} (-${used})`);
+                }
+            }
+            
+            // Apply flight usage
+            for (const [partId, usedFlightsList] of Object.entries(allocation.flightUsed)) {
+                if (remainingFlights[partId]) {
+                    for (const usage of usedFlightsList) {
+                        for (const flight of remainingFlights[partId]) {
+                            if (flight.arrivalDate && usage.date && 
+                                flight.arrivalDate.getTime() === usage.date.getTime() && flight.quantity > 0) {
+                                const before = flight.quantity;
+                                flight.quantity -= usage.quantityUsed;
+                                console.log(`✈️ Flight consumed: ${partId} ${formatDate(flight.arrivalDate)} ${before} -> ${flight.quantity} (-${usage.quantityUsed})`);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function findNextPullingDay(fromDate) {
+            let current = new Date(fromDate);
+            while (true) {
+                const dayOfWeek = current.getDay();
+                if (dayOfWeek === 1 || dayOfWeek === 3) { // Monday or Wednesday
+                    return current;
+                }
+                current.setDate(current.getDate() + 1);
+            }
+        }
+
+        function isLastDayOfMonth(date) {
+            const nextDay = new Date(date);
+            nextDay.setDate(nextDay.getDate() + 1);
+            return nextDay.getMonth() !== date.getMonth();
+        }
+
+        function calculatePullingDate(flightArrivalDate) {
+            const pullingLeadDays = parseInt(document.getElementById('pulling-lead-days').value) || 2;
+            const candidateDate = addWorkingDays(flightArrivalDate, pullingLeadDays);
+            let pullingDate = findNextPullingDay(candidateDate);
+            
+            while (isLastDayOfMonth(pullingDate)) {
+                const nextDay = new Date(pullingDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                pullingDate = findNextPullingDay(nextDay);
+            }
+            
+            return pullingDate;
+        }
+
+        function calculateDeliveryFromPulling(pullingDate) {
+            const deliveryLeadDays = parseInt(document.getElementById('delivery-lead-days').value) || 2;
+            return addWorkingDays(pullingDate, deliveryLeadDays);
+        }
+
+        // ===== MAIN PROCESSING FUNCTION WITH REAL FIFO =====
+        async function processDeliveryCalculation() {
+            try {
+                processingLog = [];
+                estimatedResults = [];
+                
+                const processBtn = document.getElementById('process-btn');
+                processBtn.disabled = true;
+                processBtn.textContent = '🔄 Processing with REAL FIFO...';
+                
+                updateProgress(10);
+                log('🚀 Starting REAL FIFO allocation logic...');
+                
+                const bufferDays = parseInt(document.getElementById('buffer-days').value) || 0;
+                const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
+                const pullingLeadDays = parseInt(document.getElementById('pulling-lead-days').value) || 2;
+                const deliveryLeadDays = parseInt(document.getElementById('delivery-lead-days').value) || 2;
+                
+                log(`⚙️ Configuration: Buffer=${bufferDays}d, FlightBuffer=${flightBufferDays}d, Pulling=${pullingLeadDays}d, Delivery=${deliveryLeadDays}d`);
+                
+                const orders = await loadCustomerOrders();
+                updateProgress(30);
+                
+                const partStockMap = await loadPartStock();
+                updateProgress(50);
+                
+                const flightArrivalsMap = await loadFlightInfo();
+                updateProgress(70);
+                
+                // REAL FIFO ALLOCATION LOGIC
+                log('📋 Applying REAL FIFO allocation logic...');
+                
+                // Sort orders by request date (FIFO)
+                const sortedOrders = [...orders].sort((a, b) => {
+                    if (!a.hasValidDate() && b.hasValidDate()) return 1;
+                    if (a.hasValidDate() && !b.hasValidDate()) return -1;
+                    if (!a.hasValidDate() && !b.hasValidDate()) return a.orderNumber - b.orderNumber;
+                    return a.requestDate.getTime() - b.requestDate.getTime();
+                });
+                
+                log(`🔢 Processing ${sortedOrders.length} orders in FIFO sequence...`);
+                
+                // Create working copies for allocation tracking
+                const remainingStock = { ...partStockMap };
+                const remainingFlights = {};
+                for (const [partId, flights] of Object.entries(flightArrivalsMap)) {
+                    remainingFlights[partId] = flights.map(f => ({ ...f }));
+                }
+                
+                console.log('📦 Initial stock levels:', remainingStock);
+                console.log('✈️ Initial flight data:', Object.keys(remainingFlights));
+                
+                estimatedResults = [];
+                
+                for (let i = 0; i < sortedOrders.length; i++) {
+                    const order = sortedOrders[i];
+                    updateProgress(70 + (i / sortedOrders.length) * 25);
+                    
+                    log(`🔄 Processing Order ${order.orderNumber} - ${order.custCode} | ${order.partId} (qty: ${order.requiredQuantity}, date: ${order.requestDate ? formatDate(order.requestDate) : order.originalDateString})`);
+                    
+                    if (!order.hasValidDate()) {
+                        const estimate = {
+                            orderNumber: order.orderNumber,
+                            partId: order.partId,
+                            requiredQuantity: order.requiredQuantity,
+                            availableQuantity: 0,
+                            requestDate: order.originalDateString,
+                            poCreateDate:order.originalPoDateString,
+                            pullingDate: null,
+                            estimatedDeliveryDate: 'Skipped',
+                            leadTimeDays: 0,
+                            status: 'Skipped',
+                            notes: `Invalid request date: '${order.originalDateString}'`,
+                            custCode: order.custCode,
+                            po: order.po,
+                            item: order.item,
+                            stockQtyBefore: 0,
+                            stockQtyAfter: 0,
+                            stockUsed: 0,
+                            flightQtyUsed: 0,
+                            flightDatesUsed: '',
+                            flightDatesNotUsed: '',
+                            warehouseNotes: 'Invalid request date'
+                        };
+                        estimatedResults.push(estimate);
+                        log(`❌ SKIPPED - Invalid request date: '${order.originalDateString}'`);
+                        continue;
+                    }
+                    
+                    // TRY TO ALLOCATE INVENTORY USING REAL LOGIC
+                    const allocation = tryAllocateInventory(order, remainingStock, remainingFlights);
+                    
+                    if (allocation.canFulfill) {
+                        // Apply allocation (consume inventory for next orders)
+                        applyAllocation(allocation, remainingStock, remainingFlights);
+                        
+                        let deliveryDate, pullingDate = null, warehouseNotes = '';
+                        
+                        if (allocation.status === 'In Stock') {
+                            // In-stock delivery logic
+                            deliveryDate = new Date(order.requestDate);
+                            
+                            if (bufferDays > 0) {
+                                deliveryDate.setDate(deliveryDate.getDate() + bufferDays);
+                            }
+                            
+                            // Ensure delivery is on a working day
+                            while (!isTaiwanWorkingDay(deliveryDate)) {
+                                deliveryDate.setDate(deliveryDate.getDate() + 1);
+                            }
+                            
+                            warehouseNotes = bufferDays > 0 ? 
+                                `Direct from stock, ${bufferDays} buffer day(s) applied` :
+                                'Direct from stock, same-day delivery';
+                        } else {
+                            // Flight-based delivery logic
+                            pullingDate = calculatePullingDate(allocation.lastFlightDate);
+                            deliveryDate = calculateDeliveryFromPulling(pullingDate);
+                            warehouseNotes = `Flight arrival: ${formatDate(allocation.lastFlightDate)} → Pulling: ${formatDate(pullingDate)} → Delivery: ${formatDate(deliveryDate)}`;
+                        }
+                        
+                        const leadTime = calculateDaysBetween(order.requestDate, deliveryDate);
+                        
+                        const estimate = {
+                            orderNumber: order.orderNumber,
+                            partId: order.partId,
+                            requiredQuantity: order.requiredQuantity,
+                            availableQuantity: allocation.totalAllocated,
+                            requestDate: formatDate(order.requestDate),
+                            poCreateDate: formatDate(order.poCreateDate),
+                            pullingDate: pullingDate ? formatDate(pullingDate) : null,
+                            estimatedDeliveryDate: formatDate(deliveryDate),
+                            leadTimeDays: leadTime,
+                            status: allocation.status,
+                            notes: allocation.notes,
+                            custCode: order.custCode,
+                            po: order.po,
+                            item: order.item,
+                            stockQtyBefore: allocation.stockQtyBefore,
+                            stockQtyAfter: allocation.stockQtyBefore - allocation.stockQtyUsed,
+                            stockUsed: allocation.stockQtyUsed,
+                            flightQtyUsed: allocation.flightQtyUsed,
+                            flightDatesUsed: allocation.flightDatesUsed,
+                            flightDatesNotUsed: allocation.flightDatesNotUsed,
+                            warehouseNotes: warehouseNotes
+                        };
+                        estimatedResults.push(estimate);
+                        log(`✅ FULFILLED - Delivery: ${formatDate(deliveryDate)} (${allocation.status})`);
+						
+						// Step 1: Remove flights with quantity <= 0
+						Object.values(remainingFlights).forEach(arrivals => {
+						  for (let i = arrivals.length - 1; i >= 0; i--) {
+							if (arrivals[i].quantity <= 0) {
+							  arrivals.splice(i, 1);
+							}
+						  }
+						});
+
+						// Step 2: Remove keys where list is empty
+						Object.keys(remainingFlights).forEach(partId => {
+						  if (remainingFlights[partId].length === 0) {
+							delete remainingFlights[partId];
+						  }
+						});
+
+                    } else {
+                        // Cannot fulfill order
+                        const estimate = {
+                            orderNumber: order.orderNumber,
+                            partId: order.partId,
+                            requiredQuantity: order.requiredQuantity,
+                            availableQuantity: allocation.totalAllocated,
+                            requestDate: formatDate(order.requestDate),
+                            poCreateDate: formatDate(order.poCreateDate),
+                            pullingDate: null,
+                            estimatedDeliveryDate: 'Skipped',
+                            leadTimeDays: 0,
+                            status: 'Skipped',
+                            notes: allocation.notes,
+                            custCode: order.custCode,
+                            po: order.po,
+                            item: order.item,
+                            stockQtyBefore: allocation.stockQtyBefore,
+                            stockQtyAfter: allocation.stockQtyBefore,
+                            stockUsed: 0,
+                            flightQtyUsed: allocation.flightQtyUsed,
+                            flightDatesUsed: allocation.flightDatesUsed,
+                            flightDatesNotUsed: allocation.flightDatesNotUsed,
+                            warehouseNotes: 'Order skipped due to insufficient inventory'
+                        };
+                        estimatedResults.push(estimate);
+                        log(`❌ SKIPPED - ${allocation.notes}`);
+                    }
+                }
+                
+                // Sort back to original order number sequence
+                estimatedResults.sort((a, b) => a.orderNumber - b.orderNumber);
+                
+                log(`🎉 REAL FIFO allocation completed for ${estimatedResults.length} orders`);
+                displayResults(estimatedResults);
+                
+                log('✅ Processing completed successfully with REAL FIFO logic!');
+                
+            } catch (error) {
+                showError(error.message);
+                log(`❌ Processing failed: ${error.message}`);
+            } finally {
+                const processBtn = document.getElementById('process-btn');
+                processBtn.disabled = false;
+                processBtn.textContent = '🚀 Calculate Delivery Dates';
+            }
+        }
+
+        function displayResults(estimates) {
+            updateProgress(95);
+            
+            const fulfilled = estimates.filter(e => e.status !== 'Skipped').length;
+            const skipped = estimates.filter(e => e.status === 'Skipped').length;
+            const inStock = estimates.filter(e => e.status === 'In Stock').length;
+            const needFlights = estimates.filter(e => e.status.includes('Flight')).length;
+            const warehousePulling = estimates.filter(e => e.pullingDate).length;
+            
+            const statsHTML = `
+                <div class="stat-item">
+                    <span class="stat-number">${estimates.length}</span>
+                    <span class="stat-label">Total Orders</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">${fulfilled}</span>
+                    <span class="stat-label">Fulfilled</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">${skipped}</span>
+                    <span class="stat-label">Skipped</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">${inStock}</span>
+                    <span class="stat-label">In Stock</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">${needFlights}</span>
+                    <span class="stat-label">Need Flights</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">${warehousePulling}</span>
+                    <span class="stat-label">Warehouse Pulling</span>
+                </div>
+            `;
+            document.getElementById('summary-stats').innerHTML = statsHTML;
+            
+            const headers = [
+                'Order #', 'Customer', 'Part ID', 'PO', 'Item', 'Req Qty', 'Alloc Qty',
+                'Request Date', 'PO Create Date', 'Pulling Date', 'Delivery Date', 'Lead Days', 'Status',
+                'Stock Before', 'Stock Used', 'Flight Qty', 'Flight Dates Used', 'Warehouse Notes'
+            ];
+            
+            let tableHTML = '<thead><tr>';
+            headers.forEach(header => {
+                tableHTML += `<th>${header}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+            
+            estimates.forEach(estimate => {
+                const statusClass = estimate.status === 'In Stock' ? 'status-in-stock' :
+                                  estimate.status.includes('Flight') ? 'status-flight' : 'status-skipped';
+                
+                tableHTML += '<tr>';
+                tableHTML += `<td>${estimate.orderNumber}</td>`;
+                tableHTML += `<td>${estimate.custCode}</td>`;
+                tableHTML += `<td>${estimate.partId}</td>`;
+                tableHTML += `<td>${estimate.po}</td>`;
+                tableHTML += `<td>${estimate.item}</td>`;
+                tableHTML += `<td>${estimate.requiredQuantity}</td>`;
+                tableHTML += `<td>${estimate.availableQuantity}</td>`;
+                tableHTML += `<td>${estimate.requestDate}</td>`;
+                tableHTML += `<td>${estimate.poCreateDate}</td>`;
+                tableHTML += `<td>${estimate.pullingDate || 'N/A'}</td>`;
+                tableHTML += `<td>${estimate.estimatedDeliveryDate}</td>`;
+                tableHTML += `<td>${estimate.leadTimeDays}</td>`;
+                tableHTML += `<td><span class="${statusClass}">${estimate.status}</span></td>`;
+                tableHTML += `<td>${estimate.stockQtyBefore}</td>`;
+                tableHTML += `<td>${estimate.stockUsed}</td>`;
+                tableHTML += `<td>${estimate.flightQtyUsed}</td>`;
+                tableHTML += `<td title="${estimate.flightDatesUsed}">${estimate.flightDatesUsed.length > 20 ? estimate.flightDatesUsed.substring(0, 17) + '...' : estimate.flightDatesUsed}</td>`;
+                tableHTML += `<td title="${estimate.warehouseNotes}">${estimate.warehouseNotes.length > 30 ? estimate.warehouseNotes.substring(0, 27) + '...' : estimate.warehouseNotes}</td>`;
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '</tbody>';
+            document.getElementById('results-table').innerHTML = tableHTML;
+            document.getElementById('results-section').style.display = 'block';
+            
+            updateProgress(100);
+            log(`📊 Results displayed: ${fulfilled} fulfilled, ${skipped} skipped, ${inStock} in-stock, ${needFlights} need flights`);
+        }
+
+        // ===== EVENT LISTENERS =====
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('✅ DOM loaded, setting up event listeners...');
+            
+            // File upload handlers
+            const orderInput = document.getElementById('order-files');
+            if (orderInput) {
+                orderInput.addEventListener('change', function(e) {
+                    console.log('📁 Order files selected:', e.target.files.length);
+                    orderFiles = Array.from(e.target.files);
+                    updateOrderInfo();
+                    checkAllFilesUploaded();
+                });
+            }
+
+            const stockInput = document.getElementById('stock-file');
+            if (stockInput) {
+                stockInput.addEventListener('change', function(e) {
+                    console.log('📁 Stock file selected:', e.target.files[0]?.name);
+                    stockFile = e.target.files[0];
+                    updateStockInfo();
+                    checkAllFilesUploaded();
+                });
+            }
+
+            const flightInput = document.getElementById('flight-file');
+            if (flightInput) {
+                flightInput.addEventListener('change', function(e) {
+                    console.log('📁 Flight file selected:', e.target.files[0]?.name);
+                    flightFile = e.target.files[0];
+                    updateFlightInfo();
+                    checkAllFilesUploaded();
+                });
+            }
+
+            console.log('🎉 REAL FIFO system initialized - ready for processing!');
+            log('🚀 REAL FIFO Delivery Estimator v2.6.2 initialized successfully!');
+        });
+
+        console.log('✅ REAL FIFO Script loaded - all functions available!');
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Date Estimator v2.6.2- REAL FIFO Logic</title>
+    <title>Delivery Date Estimator v2.7 - Partial Fulfillment Edition</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,7 +14,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -146,10 +146,10 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         .table-container { overflow-x: auto; max-height: 600px; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
         th {
             background: #f8f9fa;
-            padding: 12px 8px;
+            padding: 12px 6px;
             text-align: left;
             font-weight: 600;
             color: #495057;
@@ -157,12 +157,34 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            font-size: 0.8em;
         }
-        td { padding: 10px 8px; border-bottom: 1px solid #e9ecef; }
+        td { padding: 8px 6px; border-bottom: 1px solid #e9ecef; font-size: 0.85em; }
         tr:hover { background: #f8f9fa; }
-        .status-in-stock { background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
-        .status-flight { background: #cce7ff; color: #004085; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
-        .status-skipped { background: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .status-in-stock { background: #d4edda; color: #155724; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: 600; }
+        .status-partial { background: #fff3cd; color: #856404; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: 600; }
+        .status-flight { background: #cce7ff; color: #004085; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: 600; }
+        .status-skipped { background: #f8d7da; color: #721c24; padding: 3px 6px; border-radius: 4px; font-size: 0.75em; font-weight: 600; }
+        .flight-details, .multiple-dates {
+            font-size: 0.8em;
+            color: #666;
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .flight-details:hover, .multiple-dates:hover {
+            overflow: visible;
+            white-space: normal;
+            background: #f8f9fa;
+            z-index: 100;
+            position: relative;
+            max-width: none;
+            border: 1px solid #dee2e6;
+            padding: 5px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
         .download-section { margin-top: 30px; text-align: center; }
         .download-btn {
             background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
@@ -225,8 +247,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📦 Delivery Date Estimator v2.6</h1>
-            <p>🚀 REAL FIFO Allocation Logic - Zero Buffer Default - Fixed Flight Dates</p>
+            <h1>📦 Delivery Date Estimator v2.7</h1>
+            <p>🚀 Partial Fulfillment - Multiple Flight Tracking Edition</p>
         </div>
 
         <div class="content">
@@ -326,7 +348,7 @@
 
     <script>
         // ===== GLOBAL VARIABLES =====
-        console.log('🚀 Loading REAL FIFO Delivery Estimator v2.6...');
+        console.log('🚀 Loading Partial Fulfillment Delivery Estimator v2.7...');
         
         let orderFiles = [];
         let stockFile = null;
@@ -355,7 +377,7 @@
         }
 
         function processFiles() {
-            console.log('🔥 processFiles called - REAL FIFO LOGIC');
+            console.log('🔥 processFiles called - Partial Fulfillment Logic');
             processDeliveryCalculation();
         }
 
@@ -375,11 +397,13 @@
                     'Item': estimate.item,
                     'Part ID': estimate.partId,
                     'Required Qty': estimate.requiredQuantity,
-                    'Available Qty': estimate.availableQuantity,
                     'Request Date': estimate.requestDate,
+                    'Estimated Delivery Dates': estimate.estimatedDeliveryDate,
+                    'Pulling Dates': estimate.pullingDate || 'N/A',
+                    'Available Qty': estimate.availableQuantity,
+                    'Fulfilled Qty': estimate.fulfilledQuantity,
+                    'Remaining Qty': estimate.remainingQuantity,
                     'PO Create Date': estimate.poCreateDate,
-                    'Pulling Date': estimate.pullingDate || 'N/A',
-                    'Estimated Delivery': estimate.estimatedDeliveryDate,
                     'Lead Time (Days)': estimate.leadTimeDays,
                     'Status': estimate.status,
                     'Notes': estimate.notes,
@@ -387,14 +411,13 @@
                     'Stock After': estimate.stockQtyAfter,
                     'Stock Used': estimate.stockUsed,
                     'Flight Qty Used': estimate.flightQtyUsed,
-                    'Flight Dates Used': estimate.flightDatesUsed,
-                    'Flight Dates Not Used': estimate.flightDatesNotUsed,
+                    'Flight Details': estimate.flightDetails,
                     'Warehouse Notes': estimate.warehouseNotes
                 }));
                 
                 const ws = XLSX.utils.json_to_sheet(excelData);
                 
-                // Auto-size columns (this works with standard SheetJS)
+                // Auto-size columns
                 const cols = [];
                 const headers = Object.keys(excelData[0]);
                 headers.forEach((header, i) => {
@@ -403,17 +426,17 @@
                         const cellValue = String(row[header] || '');
                         maxLen = Math.max(maxLen, cellValue.length);
                     });
-                    cols.push({ width: Math.min(Math.max(maxLen + 2, 10), 50) });
+                    cols.push({ width: Math.min(Math.max(maxLen + 2, 10), 60) });
                 });
                 ws['!cols'] = cols;
                 
                 XLSX.utils.book_append_sheet(wb, ws, 'Delivery Estimates');
                 
                 const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
-                const filename = `delivery_estimates_REAL_FIFO_${timestamp}.xlsx`;
+                const filename = `delivery_estimates_PARTIAL_FULFILLMENT_${timestamp}.xlsx`;
                 
                 XLSX.writeFile(wb, filename);
-                log(`Basic Excel results downloaded as ${filename}`);
+                log(`Partial fulfillment results downloaded as ${filename}`);
                 
             } catch (error) {
                 alert(`Failed to download results: ${error.message}`);
@@ -751,6 +774,7 @@
             }
             
             log(`Loaded ${Object.keys(partStockMap).size} unique parts with stock info`);
+            console.log('📦 Stock map sample:', Object.keys(partStockMap).slice(0, 5), 'Total parts:', Object.keys(partStockMap).length);
             return partStockMap;
         }
 
@@ -810,12 +834,13 @@
             
             const totalFlightRecords = Object.values(flightArrivalsMap).reduce((sum, arr) => sum + arr.length, 0);
             log(`Loaded ${totalFlightRecords} flight arrival records for ${Object.keys(flightArrivalsMap).size} unique parts`);
+            console.log('✈️ Flight map sample:', Object.keys(flightArrivalsMap).slice(0, 5), 'Total parts:', Object.keys(flightArrivalsMap).length);
             return flightArrivalsMap;
         }
 
-        // ===== REAL FIFO ALLOCATION LOGIC =====
-        function tryAllocateInventory(order, availableStock, availableFlights) {
-            console.log(`🔍 Trying to allocate for ${order.partId}, qty: ${order.requiredQuantity}`);
+        // ===== PARTIAL FULFILLMENT ALLOCATION LOGIC =====
+        function tryPartialAllocation(order, availableStock, availableFlights) {
+            console.log(`🔍 Trying partial allocation for ${order.partId}, qty: ${order.requiredQuantity}`);
             
             const stockPartId = findBestMatch(order.partId, availableStock);
             const flightPartId = findBestMatch(order.partId, availableFlights);
@@ -826,160 +851,171 @@
             console.log(`📦 Stock check: ${order.partId} -> ${stockPartId} (${stockOnHand} available)`);
             console.log(`✈️ Flight check: ${order.partId} -> ${flightPartId} (${flights.length} flights)`);
             
-            // Check if stock alone is sufficient
-            if (stockOnHand >= order.requiredQuantity) {
-                console.log(`✅ IN STOCK: ${stockOnHand} >= ${order.requiredQuantity}`);
-                return {
-                    canFulfill: true,
-                    status: 'In Stock',
-                    notes: `Fulfilled from stock (${stockOnHand} available)`,
-                    totalAllocated: order.requiredQuantity,
-                    stockQtyBefore: stockOnHand,
-                    stockQtyUsed: order.requiredQuantity,
-                    flightQtyUsed: 0,
-                    flightDatesUsed: '',
-                    flightDatesNotUsed: flights.map(f => f.arrivalDate ? `${f.quantity}×${formatDate(f.arrivalDate)}` : `${f.quantity}×${f.originalDateString}`).join(', '),
-                    lastFlightDate: null,
-                    stockUsed: { [stockPartId || order.partId]: order.requiredQuantity },
-                    flightUsed: {}
-                };
-            }
-            
-            console.log(`🔄 Need flights: stock ${stockOnHand} < required ${order.requiredQuantity}`);
-            
-            // Need to combine stock + flights
-            let remainingNeeded = order.requiredQuantity - stockOnHand;
-            let cumulativeFlightQty = 0;
-            let lastRequiredFlight = null;
+            let stockUsed = 0;
+            let flightQtyUsed = 0;
+            let lastFlightDate = null;
             const usedFlights = [];
-            const flightDatesUsedList = [];
-            const flightDatesNotUsedList = [];
+            const flightDetails = [];
+            const pullingDates = [];
+            const deliveryDates = [];
             
-            const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
-            
-            for (const flight of flights) {
-                if (!flight.arrivalDate) {
-                    if (flight.quantity > 0) {
-                        flightDatesNotUsedList.push(`${flight.quantity}×${flight.originalDateString}`);
-                    }
-                    continue;
+            // Use available stock first
+            if (stockOnHand > 0) {
+                stockUsed = Math.min(stockOnHand, order.requiredQuantity);
+                console.log(`📦 Using ${stockUsed} from stock`);
+                
+                // Calculate stock delivery date
+                let stockDeliveryDate = new Date(order.requestDate);
+                const bufferDays = parseInt(document.getElementById('buffer-days').value) || 0;
+                if (bufferDays > 0) {
+                    stockDeliveryDate.setDate(stockDeliveryDate.getDate() + bufferDays);
+                }
+                while (!isTaiwanWorkingDay(stockDeliveryDate)) {
+                    stockDeliveryDate.setDate(stockDeliveryDate.getDate() + 1);
                 }
                 
-                const daysFromOrder = calculateDaysBetween(order.requestDate, flight.arrivalDate);
+                deliveryDates.push({
+                    quantity: stockUsed,
+                    date: stockDeliveryDate,
+                    type: 'stock'
+                });
+            }
+            
+            let remainingNeeded = order.requiredQuantity - stockUsed;
+            
+            // Use flights to fulfill remaining quantity - ACCEPT ALL FUTURE FLIGHTS
+            if (remainingNeeded > 0) {
+                console.log(`✈️ Need ${remainingNeeded} more from flights - checking all available flights`);
                 
-                if (daysFromOrder > flightBufferDays) {
-                    if (flight.quantity > 0) {
-                        const formattedFlightDate = formatDate(flight.arrivalDate);
-						if (flightBufferDays > 0) {
-						  flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate} (>${flightBufferDays}d late)`);
-						} else {
-						  flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate}`);
-						}
-                    }
-                    continue;
-                }
-                
-                const quantityToUse = Math.min(flight.quantity, remainingNeeded);
-                if (quantityToUse > 0 && remainingNeeded > 0) {
-                    usedFlights.push({ date: flight.arrivalDate, quantityUsed: quantityToUse });
-                    cumulativeFlightQty += quantityToUse;
-                    remainingNeeded -= quantityToUse;
-                    lastRequiredFlight = flight.arrivalDate;
+                for (const flight of flights) {
+                    if (remainingNeeded <= 0) break;
                     
-                    const formattedFlightDate = formatDate(flight.arrivalDate);
-                    flightDatesUsedList.push(`${quantityToUse}×${formattedFlightDate}`);
-                    
-                    const remainingInFlight = flight.quantity - quantityToUse;
-                    if (remainingInFlight > 0) {
-                        flightDatesNotUsedList.push(`${remainingInFlight}×${formattedFlightDate} (excess)`);
+                    if (!flight.arrivalDate) {
+                        console.log(`❌ Skipping flight with invalid date: ${flight.originalDateString}`);
+                        continue;
                     }
                     
-                  //  if (remainingNeeded <= 0) break;
-                } else if (flight.quantity > 0) {
-                    const formattedFlightDate = formatDate(flight.arrivalDate);
-                    flightDatesNotUsedList.push(`${flight.quantity}×${formattedFlightDate} (not needed)`);
+                    // Accept ANY flight in the future (no buffer day restrictions)
+                    const daysFromOrder = calculateDaysBetween(order.requestDate, flight.arrivalDate);
+                    console.log(`✈️ Checking flight ${formatDate(flight.arrivalDate)}: ${daysFromOrder} days from order date`);
+                    
+                    const quantityToUse = Math.min(flight.quantity, remainingNeeded);
+                    if (quantityToUse > 0) {
+                        // Calculate pulling and delivery dates for this flight
+                        const flightPullingDate = calculatePullingDate(flight.arrivalDate);
+                        const flightDeliveryDate = calculateDeliveryFromPulling(flightPullingDate);
+                        
+                        usedFlights.push({ 
+                            date: flight.arrivalDate, 
+                            quantityUsed: quantityToUse,
+                            originalQuantity: flight.quantity,
+                            pullingDate: flightPullingDate,
+                            deliveryDate: flightDeliveryDate
+                        });
+                        
+                        pullingDates.push({
+                            quantity: quantityToUse,
+                            date: flightPullingDate,
+                            flightDate: flight.arrivalDate
+                        });
+                        
+                        deliveryDates.push({
+                            quantity: quantityToUse,
+                            date: flightDeliveryDate,
+                            type: 'flight',
+                            flightDate: flight.arrivalDate
+                        });
+                        
+                        flightQtyUsed += quantityToUse;
+                        remainingNeeded -= quantityToUse;
+                        lastFlightDate = flight.arrivalDate;
+                        
+                        const daysLateText = daysFromOrder > 0 ? ` (+${daysFromOrder}d)` : '';
+                        flightDetails.push(`${quantityToUse}×${formatDate(flight.arrivalDate)}${daysLateText}`);
+                        console.log(`✅ Using ${quantityToUse} from flight ${formatDate(flight.arrivalDate)} (${daysFromOrder} days from order)`);
+                    }
                 }
             }
             
-            const totalAvailable = stockOnHand + cumulativeFlightQty;
-            console.log(`📊 Total available: ${totalAvailable} (stock: ${stockOnHand}, flights: ${cumulativeFlightQty})`);
+            const totalFulfilled = stockUsed + flightQtyUsed;
+            const remainingUnfulfilled = order.requiredQuantity - totalFulfilled;
             
-            if (totalAvailable < order.requiredQuantity) {
-                console.log(`❌ INSUFFICIENT: Need ${order.requiredQuantity}, only ${totalAvailable} available`);
-                return {
-                    canFulfill: false,
-                    status: 'Skipped',
-                    notes: `Need ${order.requiredQuantity}, only ${totalAvailable} available (stock: ${stockOnHand}, flights: ${cumulativeFlightQty})`,
-                    totalAllocated: totalAvailable,
-                    stockQtyBefore: stockOnHand,
-                    stockQtyUsed: 0,
-                    flightQtyUsed: cumulativeFlightQty,
-                    flightDatesUsed: flightDatesUsedList.join(', '),
-                    flightDatesNotUsed: flightDatesNotUsedList.join(', '),
-                    lastFlightDate: lastRequiredFlight,
-                    stockUsed: {},
-                    flightUsed: {}
-                };
-            }
+            console.log(`📊 Allocation result: Stock=${stockUsed}, Flight=${flightQtyUsed}, Total=${totalFulfilled}, Remaining=${remainingUnfulfilled}`);
             
-            // Can fulfill - determine status
+            // Determine status based on fulfillment level
             let status, notes;
-            if (stockOnHand > 0 && cumulativeFlightQty > 0) {
-                status = 'Partial Stock + Flight';
-                notes = `Stock: ${stockOnHand}, flights: ${cumulativeFlightQty} (last: ${formatDate(lastRequiredFlight)})`;
-                console.log(`✅ PARTIAL: Stock + Flight combination`);
-            } else if (stockOnHand === 0) {
-                status = 'Awaiting Flight';
-                notes = `All from flights: ${cumulativeFlightQty} (last: ${formatDate(lastRequiredFlight)})`;
-                console.log(`✅ FLIGHT ONLY: All from flights`);
+            if (totalFulfilled === order.requiredQuantity) {
+                if (stockUsed > 0 && flightQtyUsed > 0) {
+                    status = 'Partial Stock + Flight';
+                    notes = `Fully fulfilled: ${stockUsed} from stock, ${flightQtyUsed} from flights`;
+                } else if (stockUsed > 0) {
+                    status = 'In Stock';
+                    notes = `Fully fulfilled from stock: ${stockUsed}`;
+                } else {
+                    status = 'Awaiting Flight';
+                    notes = `Fully fulfilled from flights: ${flightQtyUsed} (last arrival: ${formatDate(lastFlightDate)})`;
+                }
+            } else if (totalFulfilled > 0) {
+                if (stockUsed > 0 && flightQtyUsed > 0) {
+                    status = 'Partial Stock + Flight';
+                    notes = `Partially fulfilled: ${totalFulfilled}/${order.requiredQuantity} (${stockUsed} stock, ${flightQtyUsed} flights). Remaining: ${remainingUnfulfilled}`;
+                } else if (stockUsed > 0) {
+                    status = 'Partial Stock Only';
+                    notes = `Partially fulfilled from stock: ${totalFulfilled}/${order.requiredQuantity}. Remaining: ${remainingUnfulfilled}`;
+                } else {
+                    status = 'Partial Flight Only';
+                    notes = `Partially fulfilled from flights: ${totalFulfilled}/${order.requiredQuantity} (last arrival: ${formatDate(lastFlightDate)}). Remaining: ${remainingUnfulfilled}`;
+                }
             } else {
-                status = 'In Stock';
-                notes = `All from stock: ${stockOnHand}`;
-                console.log(`✅ STOCK ONLY: All from stock`);
+                status = 'No Inventory Available';
+                notes = `No current stock or future flights available. Required: ${order.requiredQuantity}`;
             }
             
             return {
-                canFulfill: true,
+                stockUsed: stockUsed,
+                flightQtyUsed: flightQtyUsed,
+                totalFulfilled: totalFulfilled,
+                remainingUnfulfilled: remainingUnfulfilled,
+                lastFlightDate: lastFlightDate,
+                usedFlights: usedFlights,
+                flightDetails: flightDetails.join(', '),
+                pullingDates: pullingDates,
+                deliveryDates: deliveryDates,
                 status: status,
                 notes: notes,
-                totalAllocated: order.requiredQuantity,
-                stockQtyBefore: stockOnHand,
-                stockQtyUsed: Math.min(stockOnHand, order.requiredQuantity),
-                flightQtyUsed: cumulativeFlightQty,
-                flightDatesUsed: flightDatesUsedList.join(', '),
-                flightDatesNotUsed: flightDatesNotUsedList.join(', '),
-                lastFlightDate: lastRequiredFlight,
-                stockUsed: stockOnHand > 0 ? { [stockPartId || order.partId]: Math.min(stockOnHand, order.requiredQuantity) } : {},
-                flightUsed: usedFlights.length > 0 ? { [flightPartId || order.partId]: usedFlights } : {}
+                stockPartId: stockPartId,
+                flightPartId: flightPartId
             };
         }
 
-        function applyAllocation(allocation, remainingStock, remainingFlights) {
-            console.log(`🔄 Applying allocation...`);
+        function applyPartialAllocation(allocation, remainingStock, remainingFlights, order) {
+            console.log(`🔄 Applying partial allocation for order ${order.orderNumber}...`);
             
             // Apply stock usage
-            for (const [partId, used] of Object.entries(allocation.stockUsed)) {
-                if (remainingStock[partId] !== undefined) {
-                    const before = remainingStock[partId];
-                    remainingStock[partId] -= used;
-                    console.log(`📦 Stock consumed: ${partId} ${before} -> ${remainingStock[partId]} (-${used})`);
-                }
+            if (allocation.stockUsed > 0 && allocation.stockPartId) {
+                const before = remainingStock[allocation.stockPartId];
+                remainingStock[allocation.stockPartId] -= allocation.stockUsed;
+                console.log(`📦 Stock consumed: ${allocation.stockPartId} ${before} -> ${remainingStock[allocation.stockPartId]} (-${allocation.stockUsed})`);
             }
             
             // Apply flight usage
-            for (const [partId, usedFlightsList] of Object.entries(allocation.flightUsed)) {
-                if (remainingFlights[partId]) {
-                    for (const usage of usedFlightsList) {
-                        for (const flight of remainingFlights[partId]) {
-                            if (flight.arrivalDate && usage.date && 
-                                flight.arrivalDate.getTime() === usage.date.getTime() && flight.quantity > 0) {
-                                const before = flight.quantity;
-                                flight.quantity -= usage.quantityUsed;
-                                console.log(`✈️ Flight consumed: ${partId} ${formatDate(flight.arrivalDate)} ${before} -> ${flight.quantity} (-${usage.quantityUsed})`);
-                                break;
-                            }
+            if (allocation.flightQtyUsed > 0 && allocation.flightPartId && remainingFlights[allocation.flightPartId]) {
+                for (const usage of allocation.usedFlights) {
+                    for (const flight of remainingFlights[allocation.flightPartId]) {
+                        if (flight.arrivalDate && usage.date && 
+                            flight.arrivalDate.getTime() === usage.date.getTime() && flight.quantity > 0) {
+                            const before = flight.quantity;
+                            flight.quantity -= usage.quantityUsed;
+                            console.log(`✈️ Flight consumed: ${allocation.flightPartId} ${formatDate(flight.arrivalDate)} ${before} -> ${flight.quantity} (-${usage.quantityUsed})`);
+                            break;
                         }
                     }
+                }
+                
+                // Clean up empty flights
+                remainingFlights[allocation.flightPartId] = remainingFlights[allocation.flightPartId].filter(f => f.quantity > 0);
+                if (remainingFlights[allocation.flightPartId].length === 0) {
+                    delete remainingFlights[allocation.flightPartId];
                 }
             }
         }
@@ -1020,7 +1056,7 @@
             return addWorkingDays(pullingDate, deliveryLeadDays);
         }
 
-        // ===== MAIN PROCESSING FUNCTION WITH REAL FIFO =====
+        // ===== MAIN PROCESSING FUNCTION WITH PARTIAL FULFILLMENT =====
         async function processDeliveryCalculation() {
             try {
                 processingLog = [];
@@ -1028,10 +1064,10 @@
                 
                 const processBtn = document.getElementById('process-btn');
                 processBtn.disabled = true;
-                processBtn.textContent = '🔄 Processing with REAL FIFO...';
+                processBtn.textContent = '🔄 Processing with Partial Fulfillment...';
                 
                 updateProgress(10);
-                log('🚀 Starting REAL FIFO allocation logic...');
+                log('🚀 Starting Partial Fulfillment allocation logic...');
                 
                 const bufferDays = parseInt(document.getElementById('buffer-days').value) || 0;
                 const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
@@ -1049,18 +1085,34 @@
                 const flightArrivalsMap = await loadFlightInfo();
                 updateProgress(70);
                 
-                // REAL FIFO ALLOCATION LOGIC
-                log('📋 Applying REAL FIFO allocation logic...');
+                // PARTIAL FULFILLMENT ALLOCATION LOGIC
+                log('📋 Applying Partial Fulfillment allocation logic...');
                 
-                // Sort orders by request date (FIFO)
+                // Sort orders by request date (FIFO), then by PO create date as secondary sort
                 const sortedOrders = [...orders].sort((a, b) => {
+                    // Handle invalid dates - put them at the end
                     if (!a.hasValidDate() && b.hasValidDate()) return 1;
                     if (a.hasValidDate() && !b.hasValidDate()) return -1;
                     if (!a.hasValidDate() && !b.hasValidDate()) return a.orderNumber - b.orderNumber;
-                    return a.requestDate.getTime() - b.requestDate.getTime();
+                    
+                    // Primary sort: request date ascending
+                    const requestDateDiff = a.requestDate.getTime() - b.requestDate.getTime();
+                    if (requestDateDiff !== 0) return requestDateDiff;
+                    
+                    // Secondary sort: PO create date ascending
+                    if (a.poCreateDate && b.poCreateDate) {
+                        return a.poCreateDate.getTime() - b.poCreateDate.getTime();
+                    } else if (a.poCreateDate && !b.poCreateDate) {
+                        return -1; // Valid PO date comes before invalid
+                    } else if (!a.poCreateDate && b.poCreateDate) {
+                        return 1; // Invalid PO date comes after valid
+                    }
+                    
+                    // Tertiary sort: order number if both dates are the same or both invalid
+                    return a.orderNumber - b.orderNumber;
                 });
                 
-                log(`🔢 Processing ${sortedOrders.length} orders in FIFO sequence...`);
+                log(`🔢 Processing ${sortedOrders.length} orders in FIFO sequence (request date → PO create date) with partial fulfillment...`);
                 
                 // Create working copies for allocation tracking
                 const remainingStock = { ...partStockMap };
@@ -1086,12 +1138,14 @@
                             partId: order.partId,
                             requiredQuantity: order.requiredQuantity,
                             availableQuantity: 0,
+                            fulfilledQuantity: 0,
+                            remainingQuantity: order.requiredQuantity,
                             requestDate: order.originalDateString,
-                            poCreateDate:order.originalPoDateString,
+                            poCreateDate: order.originalPoDateString,
                             pullingDate: null,
-                            estimatedDeliveryDate: 'Skipped',
+                            estimatedDeliveryDate: 'Invalid Date',
                             leadTimeDays: 0,
-                            status: 'Skipped',
+                            status: 'Invalid Date',
                             notes: `Invalid request date: '${order.originalDateString}'`,
                             custCode: order.custCode,
                             po: order.po,
@@ -1100,8 +1154,7 @@
                             stockQtyAfter: 0,
                             stockUsed: 0,
                             flightQtyUsed: 0,
-                            flightDatesUsed: '',
-                            flightDatesNotUsed: '',
+                            flightDetails: '',
                             warehouseNotes: 'Invalid request date'
                         };
                         estimatedResults.push(estimate);
@@ -1109,119 +1162,117 @@
                         continue;
                     }
                     
-                    // TRY TO ALLOCATE INVENTORY USING REAL LOGIC
-                    const allocation = tryAllocateInventory(order, remainingStock, remainingFlights);
+                    // TRY PARTIAL ALLOCATION
+                    const allocation = tryPartialAllocation(order, remainingStock, remainingFlights);
                     
-                    if (allocation.canFulfill) {
-                        // Apply allocation (consume inventory for next orders)
-                        applyAllocation(allocation, remainingStock, remainingFlights);
+                    // Get CURRENT stock levels before applying allocation
+                    const stockPartId = findBestMatch(order.partId, remainingStock);
+                    const currentStockBefore = stockPartId ? (remainingStock[stockPartId] || 0) : 0;
+                    const currentStockAfter = currentStockBefore - allocation.stockUsed;
+                    
+                    console.log(`📊 Stock tracking for ${order.partId}: Before=${currentStockBefore}, Used=${allocation.stockUsed}, After=${currentStockAfter}`);
+                    
+                    // Apply allocation (consume inventory for next orders)
+                    applyPartialAllocation(allocation, remainingStock, remainingFlights, order);
+                    
+                    let deliveryDate, pullingDate = null, warehouseNotes = '';
+                    let multiplePullingDates = null;
+                    let multipleDeliveryDates = '';
+                    
+                    if (allocation.totalFulfilled > 0) {
+                        // Generate multiple pulling and delivery dates display
+                        let warehouseNotesDetails = [];
                         
-                        let deliveryDate, pullingDate = null, warehouseNotes = '';
+                        // Sort dates by delivery date for proper display
+                        const sortedDeliveryDates = [...allocation.deliveryDates].sort((a, b) => a.date.getTime() - b.date.getTime());
+                        const sortedPullingDates = [...allocation.pullingDates].sort((a, b) => a.date.getTime() - b.date.getTime());
                         
-                        if (allocation.status === 'In Stock') {
-                            // In-stock delivery logic
-                            deliveryDate = new Date(order.requestDate);
-                            
-                            if (bufferDays > 0) {
-                                deliveryDate.setDate(deliveryDate.getDate() + bufferDays);
+                        // Format delivery dates
+                        multipleDeliveryDates = sortedDeliveryDates.map(item => {
+                            const dateStr = formatDate(item.date);
+                            if (item.type === 'stock') {
+                                return `${item.quantity}×${dateStr} (stock)`;
+                            } else {
+                                return `${item.quantity}×${dateStr} (flight)`;
                             }
-                            
-                            // Ensure delivery is on a working day
-                            while (!isTaiwanWorkingDay(deliveryDate)) {
-                                deliveryDate.setDate(deliveryDate.getDate() + 1);
-                            }
-                            
-                            warehouseNotes = bufferDays > 0 ? 
-                                `Direct from stock, ${bufferDays} buffer day(s) applied` :
-                                'Direct from stock, same-day delivery';
-                        } else {
-                            // Flight-based delivery logic
-                            pullingDate = calculatePullingDate(allocation.lastFlightDate);
-                            deliveryDate = calculateDeliveryFromPulling(pullingDate);
-                            warehouseNotes = `Flight arrival: ${formatDate(allocation.lastFlightDate)} → Pulling: ${formatDate(pullingDate)} → Delivery: ${formatDate(deliveryDate)}`;
+                        }).join(', ');
+                        
+                        // Format pulling dates (only for flights)
+                        if (sortedPullingDates.length > 0) {
+                            multiplePullingDates = sortedPullingDates.map(item => {
+                                return `${item.quantity}×${formatDate(item.date)}`;
+                            }).join(', ');
                         }
                         
-                        const leadTime = calculateDaysBetween(order.requestDate, deliveryDate);
+                        // Set primary delivery date (latest date for lead time calculation)
+                        deliveryDate = sortedDeliveryDates[sortedDeliveryDates.length - 1].date;
                         
-                        const estimate = {
-                            orderNumber: order.orderNumber,
-                            partId: order.partId,
-                            requiredQuantity: order.requiredQuantity,
-                            availableQuantity: allocation.totalAllocated,
-                            requestDate: formatDate(order.requestDate),
-                            poCreateDate: formatDate(order.poCreateDate),
-                            pullingDate: pullingDate ? formatDate(pullingDate) : null,
-                            estimatedDeliveryDate: formatDate(deliveryDate),
-                            leadTimeDays: leadTime,
-                            status: allocation.status,
-                            notes: allocation.notes,
-                            custCode: order.custCode,
-                            po: order.po,
-                            item: order.item,
-                            stockQtyBefore: allocation.stockQtyBefore,
-                            stockQtyAfter: allocation.stockQtyBefore - allocation.stockQtyUsed,
-                            stockUsed: allocation.stockQtyUsed,
-                            flightQtyUsed: allocation.flightQtyUsed,
-                            flightDatesUsed: allocation.flightDatesUsed,
-                            flightDatesNotUsed: allocation.flightDatesNotUsed,
-                            warehouseNotes: warehouseNotes
-                        };
-                        estimatedResults.push(estimate);
-                        log(`✅ FULFILLED - Delivery: ${formatDate(deliveryDate)} (${allocation.status})`);
-						
-						// Step 1: Remove flights with quantity <= 0
-						Object.values(remainingFlights).forEach(arrivals => {
-						  for (let i = arrivals.length - 1; i >= 0; i--) {
-							if (arrivals[i].quantity <= 0) {
-							  arrivals.splice(i, 1);
-							}
-						  }
-						});
-
-						// Step 2: Remove keys where list is empty
-						Object.keys(remainingFlights).forEach(partId => {
-						  if (remainingFlights[partId].length === 0) {
-							delete remainingFlights[partId];
-						  }
-						});
-
+                        // Set primary pulling date (latest pulling date)
+                        if (sortedPullingDates.length > 0) {
+                            pullingDate = sortedPullingDates[sortedPullingDates.length - 1].date;
+                        }
+                        
+                        // Generate warehouse notes
+                        if (allocation.stockUsed > 0) {
+                            const stockDelivery = sortedDeliveryDates.find(d => d.type === 'stock');
+                            warehouseNotesDetails.push(`${allocation.stockUsed} from stock → ${formatDate(stockDelivery.date)}`);
+                        }
+                        
+                        if (allocation.flightQtyUsed > 0) {
+                            const flightDeliveries = sortedDeliveryDates.filter(d => d.type === 'flight');
+                            flightDeliveries.forEach(flight => {
+                                const daysToFlight = calculateDaysBetween(order.requestDate, flight.flightDate);
+                                const timingText = daysToFlight > 0 ? ` (+${daysToFlight}d)` : '';
+                                warehouseNotesDetails.push(`${flight.quantity} from flight ${formatDate(flight.flightDate)}${timingText} → ${formatDate(flight.date)}`);
+                            });
+                        }
+                        
+                        warehouseNotes = warehouseNotesDetails.join('; ');
+                        
                     } else {
-                        // Cannot fulfill order
-                        const estimate = {
-                            orderNumber: order.orderNumber,
-                            partId: order.partId,
-                            requiredQuantity: order.requiredQuantity,
-                            availableQuantity: allocation.totalAllocated,
-                            requestDate: formatDate(order.requestDate),
-                            poCreateDate: formatDate(order.poCreateDate),
-                            pullingDate: null,
-                            estimatedDeliveryDate: 'Skipped',
-                            leadTimeDays: 0,
-                            status: 'Skipped',
-                            notes: allocation.notes,
-                            custCode: order.custCode,
-                            po: order.po,
-                            item: order.item,
-                            stockQtyBefore: allocation.stockQtyBefore,
-                            stockQtyAfter: allocation.stockQtyBefore,
-                            stockUsed: 0,
-                            flightQtyUsed: allocation.flightQtyUsed,
-                            flightDatesUsed: allocation.flightDatesUsed,
-                            flightDatesNotUsed: allocation.flightDatesNotUsed,
-                            warehouseNotes: 'Order skipped due to insufficient inventory'
-                        };
-                        estimatedResults.push(estimate);
-                        log(`❌ SKIPPED - ${allocation.notes}`);
+                        // No fulfillment possible
+                        deliveryDate = new Date(order.requestDate);
+                        multipleDeliveryDates = 'No Flights Available';
+                        warehouseNotes = 'No inventory available - no current stock or future flights';
                     }
+                    
+                    const leadTime = allocation.totalFulfilled > 0 ? calculateDaysBetween(order.requestDate, deliveryDate) : 0;
+                    
+                    const estimate = {
+                        orderNumber: order.orderNumber,
+                        partId: order.partId,
+                        requiredQuantity: order.requiredQuantity,
+                        availableQuantity: allocation.totalFulfilled,
+                        fulfilledQuantity: allocation.totalFulfilled,
+                        remainingQuantity: allocation.remainingUnfulfilled,
+                        requestDate: formatDate(order.requestDate),
+                        poCreateDate: formatDate(order.poCreateDate),
+                        pullingDate: multiplePullingDates,
+                        estimatedDeliveryDate: allocation.totalFulfilled > 0 ? multipleDeliveryDates : 'No Flights Available',
+                        leadTimeDays: leadTime,
+                        status: allocation.status,
+                        notes: allocation.notes,
+                        custCode: order.custCode,
+                        po: order.po,
+                        item: order.item,
+                        stockQtyBefore: currentStockBefore,
+                        stockQtyAfter: currentStockAfter,
+                        stockUsed: allocation.stockUsed,
+                        flightQtyUsed: allocation.flightQtyUsed,
+                        flightDetails: allocation.flightDetails,
+                        warehouseNotes: warehouseNotes
+                    };
+                    estimatedResults.push(estimate);
+                    log(`✅ PROCESSED - ${allocation.status}: ${allocation.totalFulfilled}/${order.requiredQuantity} fulfilled`);
                 }
                 
                 // Sort back to original order number sequence
                 estimatedResults.sort((a, b) => a.orderNumber - b.orderNumber);
                 
-                log(`🎉 REAL FIFO allocation completed for ${estimatedResults.length} orders`);
+                log(`🎉 Partial Fulfillment allocation completed for ${estimatedResults.length} orders`);
                 displayResults(estimatedResults);
                 
-                log('✅ Processing completed successfully with REAL FIFO logic!');
+                log('✅ Processing completed successfully with Partial Fulfillment logic!');
                 
             } catch (error) {
                 showError(error.message);
@@ -1236,11 +1287,12 @@
         function displayResults(estimates) {
             updateProgress(95);
             
-            const fulfilled = estimates.filter(e => e.status !== 'Skipped').length;
-            const skipped = estimates.filter(e => e.status === 'Skipped').length;
+            const fullyFulfilled = estimates.filter(e => e.remainingQuantity === 0 && e.fulfilledQuantity > 0).length;
+            const partiallyFulfilled = estimates.filter(e => e.remainingQuantity > 0 && e.fulfilledQuantity > 0).length;
+            const noInventory = estimates.filter(e => e.fulfilledQuantity === 0).length;
             const inStock = estimates.filter(e => e.status === 'In Stock').length;
-            const needFlights = estimates.filter(e => e.status.includes('Flight')).length;
-            const warehousePulling = estimates.filter(e => e.pullingDate).length;
+            const awaitingFlights = estimates.filter(e => e.status.includes('Flight') || e.status === 'Awaiting Flight').length;
+            const futureFlights = estimates.filter(e => e.flightQtyUsed > 0).length;
             
             const statsHTML = `
                 <div class="stat-item">
@@ -1248,32 +1300,32 @@
                     <span class="stat-label">Total Orders</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">${fulfilled}</span>
-                    <span class="stat-label">Fulfilled</span>
+                    <span class="stat-number">${fullyFulfilled}</span>
+                    <span class="stat-label">Fully Fulfilled</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">${skipped}</span>
-                    <span class="stat-label">Skipped</span>
+                    <span class="stat-number">${partiallyFulfilled}</span>
+                    <span class="stat-label">Partially Fulfilled</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">${noInventory}</span>
+                    <span class="stat-label">No Inventory</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-number">${inStock}</span>
                     <span class="stat-label">In Stock</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-number">${needFlights}</span>
-                    <span class="stat-label">Need Flights</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">${warehousePulling}</span>
-                    <span class="stat-label">Warehouse Pulling</span>
+                    <span class="stat-number">${futureFlights}</span>
+                    <span class="stat-label">Using Future Flights</span>
                 </div>
             `;
             document.getElementById('summary-stats').innerHTML = statsHTML;
             
             const headers = [
-                'Order #', 'Customer', 'Part ID', 'PO', 'Item', 'Req Qty', 'Alloc Qty',
-                'Request Date', 'PO Create Date', 'Pulling Date', 'Delivery Date', 'Lead Days', 'Status',
-                'Stock Before', 'Stock Used', 'Flight Qty', 'Flight Dates Used', 'Warehouse Notes'
+                'Order #', 'Cust Code', 'PO', 'Item', 'Part ID', 'Req Qty', 'Request Date', 'Delivery Dates', 'Pulling Dates',
+                'Fulfilled', 'Remaining', 'PO Create Date', 'Lead Days', 'Status',
+                'Stock Used', 'Flight Qty', 'Flight Details', 'Warehouse Notes'
             ];
             
             let tableHTML = '<thead><tr>';
@@ -1284,27 +1336,28 @@
             
             estimates.forEach(estimate => {
                 const statusClass = estimate.status === 'In Stock' ? 'status-in-stock' :
-                                  estimate.status.includes('Flight') ? 'status-flight' : 'status-skipped';
+                                  estimate.status.includes('Flight') || estimate.status === 'Awaiting Flight' ? 'status-flight' :
+                                  estimate.status.includes('Partial') ? 'status-partial' : 'status-skipped';
                 
                 tableHTML += '<tr>';
                 tableHTML += `<td>${estimate.orderNumber}</td>`;
                 tableHTML += `<td>${estimate.custCode}</td>`;
-                tableHTML += `<td>${estimate.partId}</td>`;
                 tableHTML += `<td>${estimate.po}</td>`;
                 tableHTML += `<td>${estimate.item}</td>`;
+                tableHTML += `<td>${estimate.partId}</td>`;
                 tableHTML += `<td>${estimate.requiredQuantity}</td>`;
-                tableHTML += `<td>${estimate.availableQuantity}</td>`;
                 tableHTML += `<td>${estimate.requestDate}</td>`;
+                tableHTML += `<td class="multiple-dates" title="${estimate.estimatedDeliveryDate}">${estimate.estimatedDeliveryDate}</td>`;
+                tableHTML += `<td class="multiple-dates" title="${estimate.pullingDate}">${estimate.pullingDate || 'N/A'}</td>`;
+                tableHTML += `<td>${estimate.fulfilledQuantity}</td>`;
+                tableHTML += `<td>${estimate.remainingQuantity}</td>`;
                 tableHTML += `<td>${estimate.poCreateDate}</td>`;
-                tableHTML += `<td>${estimate.pullingDate || 'N/A'}</td>`;
-                tableHTML += `<td>${estimate.estimatedDeliveryDate}</td>`;
                 tableHTML += `<td>${estimate.leadTimeDays}</td>`;
                 tableHTML += `<td><span class="${statusClass}">${estimate.status}</span></td>`;
-                tableHTML += `<td>${estimate.stockQtyBefore}</td>`;
                 tableHTML += `<td>${estimate.stockUsed}</td>`;
                 tableHTML += `<td>${estimate.flightQtyUsed}</td>`;
-                tableHTML += `<td title="${estimate.flightDatesUsed}">${estimate.flightDatesUsed.length > 20 ? estimate.flightDatesUsed.substring(0, 17) + '...' : estimate.flightDatesUsed}</td>`;
-                tableHTML += `<td title="${estimate.warehouseNotes}">${estimate.warehouseNotes.length > 30 ? estimate.warehouseNotes.substring(0, 27) + '...' : estimate.warehouseNotes}</td>`;
+                tableHTML += `<td class="flight-details" title="${estimate.flightDetails}">${estimate.flightDetails}</td>`;
+                tableHTML += `<td title="${estimate.warehouseNotes}">${estimate.warehouseNotes.length > 40 ? estimate.warehouseNotes.substring(0, 37) + '...' : estimate.warehouseNotes}</td>`;
                 tableHTML += '</tr>';
             });
             
@@ -1313,7 +1366,7 @@
             document.getElementById('results-section').style.display = 'block';
             
             updateProgress(100);
-            log(`📊 Results displayed: ${fulfilled} fulfilled, ${skipped} skipped, ${inStock} in-stock, ${needFlights} need flights`);
+            log(`📊 Results displayed: ${fullyFulfilled} fully fulfilled, ${partiallyFulfilled} partially fulfilled, ${noInventory} no inventory, ${futureFlights} using future flights`);
         }
 
         // ===== EVENT LISTENERS =====
@@ -1351,11 +1404,11 @@
                 });
             }
 
-            console.log('🎉 REAL FIFO system initialized - ready for processing!');
-            log('🚀 REAL FIFO Delivery Estimator v2.6.2 initialized successfully!');
+            console.log('🎉 Partial Fulfillment system initialized - ready for processing!');
+            log('🚀 Partial Fulfillment Delivery Estimator v2.7 initialized successfully!');
         });
 
-        console.log('✅ REAL FIFO Script loaded - all functions available!');
+        console.log('✅ Partial Fulfillment Script loaded - all functions available!');
     </script>
 </body>
 </html>

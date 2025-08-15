@@ -1,6 +1,6 @@
 # Delivery Date Estimator - Requirements Specification
 
-**Version:** 2.7 (Partial Fulfillment Edition with Multiple Date Tracking)  
+**Version:** 2.8 (Partial Fulfillment Edition with Multiple Date Tracking)  
 **Date:** August 2025  
 **Platform:** Modern Web Browsers (Chrome, Firefox, Safari, Edge)  
 **Libraries:** SheetJS (XLSX.js) for Excel file processing  
@@ -94,12 +94,13 @@ A browser-based JavaScript application that processes customer orders using **Pa
 - Order B: Request Date = 2025-08-01, PO Date = 2025-07-10, Order# = 101  
 - **Processing Order**: B → A (same request date, but B has earlier PO date)
 
-### 3.3 Flight Acceptance Criteria
-- **All Future Flights Accepted:** No buffer day restrictions - any flight in the future can be used
-- **Early Flights:** Always accept flights arriving before order date
-- **Late Flights:** Accept all flights arriving after order date (unlimited days late)
-- **Unparseable Dates:** Flights with unparseable dates are excluded from allocation
-- **Maximize Utilization:** System uses every available flight to maximize order fulfillment
+### 3.3 Flight Date Interpretation and Acceptance Criteria
+- **Flight Date Definition:** The date in flight file represents **flight departure date**, not arrival date
+- **Flight Arrival Calculation:** Flights typically arrive same day or next day after departure
+- **Customs Clearance:** Requires 1 business day (Monday-Saturday) after flight arrival
+- **All Future Flights Accepted:** No buffer day restrictions - any flight departure in the future can be used
+- **Early Flights:** Always accept flights departing before order date
+- **Late Flights:** Accept all flights departing after order date (unlimited days late)
 
 ### 3.4 Restrictive Part Number Matching
 - **Purpose:** Handle part numbers with "-A" postfix variations only
@@ -135,29 +136,62 @@ The system uses Taiwan's official ROC Year 114 (2025) business calendar for all 
 15. **10月24日 (2025-10-24)** - Additional Holiday (補假)
 16. **12月25日 (2025-12-25)** - Christmas Day (聖誕節)
 
-### 3.7 **Enhanced Warehouse Pulling Rules**
-Flight arrival dates represent when parts arrive at the airport. Parts must then be pulled into the warehouse before delivery can occur.
+### 3.7 **Enhanced Warehouse Pulling Rules with Flight Processing Sequence**
 
-**Pulling Constraints:**
+Flight departure dates represent when flights leave their origin. The complete processing sequence from flight departure to warehouse pulling involves multiple stages with specific business rules.
+
+**Flight Processing Sequence:**
+1. **Flight Departure:** Date specified in flight file (input data)
+2. **Flight Arrival:** Departure + 0-1 days (typically next day for international flights)
+3. **Customs Clearance:** Arrival + 1 business day (Monday-Saturday, excludes Taiwan holidays)
+4. **Pulling Eligibility:** Clearance completion + configurable lead days (default: 1 day)
+5. **Pulling Date:** Next available Monday or Wednesday after eligibility
+
+**Company Pulling Rules (Original Chinese):**
+- 拉回(pulling in): 固定周一和周三，再隔兩天才能出貨，即周三和周五
+- 當月最後一天不能拉回
+- 班機在周末六日,周一也不可以拉回, 只能週三
+
+**Enhanced Pulling Constraints:**
 1. **Only Monday and Wednesday** are allowed for warehouse pulling operations
 2. **Cannot pull on the last day of the month** (operational constraint)
 3. **Must be a Taiwan working day** (excludes weekends and Taiwan holidays)
-4. **Lead time:** Minimum configurable Taiwan working days between flight arrival and pulling eligibility (default: 2 days)
+4. **Weekend flight restriction:** If flight departs Saturday/Sunday, cannot pull Monday, must wait until Wednesday
+5. **Customs clearance timing:** Minimum 1 business day (Monday-Saturday) after flight arrival
+6. **Lead time:** Configurable Taiwan working days between customs clearance completion and pulling eligibility (default: 1 day)
 
 **Enhanced Pulling Date Calculation Process:**
-1. **Start Date:** Flight arrival date at airport
-2. **Add Lead Time:** + configurable Taiwan working days (excludes weekends and holidays)
-3. **Find Valid Day:** Next Monday or Wednesday from candidate date
-4. **Working Day Check:** Ensure selected date is a Taiwan working day (not holiday)
-5. **Month End Check:** If last day of month, move to next valid pulling day
-6. **Final Pulling Date:** Confirmed warehouse pulling date
+1. **Flight Departure Date:** Input from flight file
+2. **Calculate Arrival Date:** Departure + 1 day (international flight assumption)
+3. **Calculate Customs Clearance Date:** 
+   - Arrival + 1 business day
+   - Skip Sundays (customs closed)
+   - Skip Taiwan holidays (customs closed)
+4. **Add Lead Time:** Clearance + configurable working days (default: 1 day)
+5. **Find Valid Pulling Day:** Next Monday or Wednesday from candidate date
+6. **Apply Weekend Flight Rule:** If departure was Sat/Sun, skip Monday options
+7. **Working Day Check:** Ensure selected date is a Taiwan working day (not holiday)
+8. **Month End Check:** If last day of month, move to next valid pulling day
+9. **Final Pulling Date:** Confirmed warehouse pulling date
+
+**Customs Clearance Rules:**
+- **Operating Days:** Monday through Saturday
+- **Closed:** Sundays and Taiwan holidays
+- **Processing Time:** 1 business day minimum
+- **Integration:** Automatically calculated in pulling date sequence
+
+**Example Calculation:**
+- Flight departs Friday → Arrives Saturday → Customs Monday → Lead time Tuesday → Pull Wednesday
+- Flight departs Saturday → Arrives Sunday → Customs Monday → Lead time Tuesday → Pull Wednesday (Monday skipped due to weekend departure)
+- Flight departs Sunday → Arrives Monday → Customs Tuesday → Lead time Wednesday → Pull Wednesday
 
 ### 3.8 **🆕 Multiple Delivery Date Calculation**
 The delivery calculation now supports multiple delivery dates for orders fulfilled across multiple flights:
 
 **In-Stock Orders:**
-- **Formula:** `Delivery Date = Order Date + Buffer Days (default: 0) + Weekend/Holiday Adjustment`
-- **Single Delivery Date:** All stock delivered at once
+- **Formula:** `Delivery Date = Order Date + Buffer Days (default: 0) + Working Day Adjustment (BACKWARD)`
+- **Working Day Rule:** If order date falls on weekend/holiday, delivery moves to **previous** working day
+- **Zero Buffer Default:** Same-day delivery for working day requests, previous working day for weekend/holiday requests
 - **Format:** `"500×2025-08-01 (stock)"`
 
 **Flight-Based Orders:**
@@ -247,13 +281,58 @@ The delivery calculation now supports multiple delivery dates for orders fulfill
 - **Enhanced Column Order:** Priority information first, technical details after
 
 ### 5.3 **🆕 Enhanced Status Values**
-- **"In Stock"** - Fully fulfilled from existing stock (single delivery date)
-- **"Partial Stock + Flight"** - Mixed fulfillment using stock and flights (multiple delivery dates)
-- **"Awaiting Flight"** - Fully fulfilled from flight arrivals (multiple delivery dates possible)
-- **"Partial Stock Only"** - Partially fulfilled using only available stock
-- **"Partial Flight Only"** - Partially fulfilled using only available flights
-- **"No Inventory Available"** - No current stock or future flights available
-- **"Invalid Date"** - Orders with unparseable request dates
+
+The system provides detailed status classifications based on fulfillment method and completeness, enabling accurate tracking of partial fulfillment scenarios.
+
+**Primary Status Categories:**
+
+-   **"In Stock"** - Fully fulfilled from existing stock (single delivery date)
+-   **"Partial Stock + Flight"** - Mixed fulfillment using stock and flights (multiple delivery dates)
+-   **"Awaiting Flight"** - Fully fulfilled from flight arrivals (multiple delivery dates possible)
+-   **"Partial Stock Only"** - Partially fulfilled using only available stock
+-   **"Partial Flight Only"** - Partially fulfilled using only available flights
+-   **"No Inventory Available"** - No current stock or future flights available
+-   **"Invalid Date"** - Orders with unparseable request dates
+
+**Status Classification Logic:**
+
+-   **Full Fulfillment (100%):**
+
+    -   Stock only → "In Stock"
+    -   Flight only → "Awaiting Flight"
+    -   Stock + Flight → "Partial Stock + Flight"
+-   **Partial Fulfillment (1-99%):**
+
+    -   Stock only used → "Partial Stock Only"
+    -   Flight only used → "Partial Flight Only"
+    -   Stock + Flight used → "Partial Stock + Flight"
+-   **No Fulfillment (0%):**
+
+    -   No inventory sources → "No Inventory Available"
+-   **Processing Issues:**
+
+    -   Invalid request date → "Invalid Date"
+
+**Stock Delivery Date Behavior by Status:**
+
+-   Any order using stock (regardless of status) follows backward adjustment rule
+-   Weekend/holiday requests deliver on previous working day
+-   Stock delivery dates contain "(stock)" identifier in delivery date field
+-   Multiple delivery scenarios properly tracked with individual date components
+
+**Flight Delivery Date Behavior by Status:**
+
+-   Any order using flights follows departure-based pulling calculation
+-   Flight delivery dates contain "(flight)" identifier in delivery date field
+-   Multiple flight dates tracked individually with separate pulling/delivery dates
+-   Weekend departure restrictions properly applied to pulling dates
+
+**Status Persistence Rules:**
+
+-   Status reflects final fulfillment state after allocation
+-   Partial fulfillment statuses indicate maximum possible fulfillment achieved
+-   No orders skipped due to insufficient inventory (core partial fulfillment principle)
+-   Status accurately represents business reality for customer communication
 
 ### 5.4 **🆕 Enhanced Summary Statistics**
 **Real-time Dashboard:**
@@ -440,7 +519,7 @@ if (sortedPullingDates.length > 0) {
 ## 9. DEPLOYMENT & USAGE
 
 ### 9.1 **Deployment Model**
-- **Single File:** Complete application in one HTML file (delivery_estimator_v2.7_PARTIAL_FULFILLMENT.html)
+- **Single File:** Complete application in one HTML file (delivery_estimator_v2.8_PARTIAL_FULFILLMENT.html)
 - **CDN Dependencies:** SheetJS library loaded from CloudFlare CDN
 - **No Server Required:** Runs entirely client-side
 - **Distribution:** Email, web hosting, or file sharing
@@ -464,27 +543,54 @@ if (sortedPullingDates.length > 0) {
 
 ## 10. VALIDATION CHECKLIST
 
-When verifying browser-based results, check:
-- [ ] **File Upload:** All three file types upload successfully with visual confirmation
-- [ ] **🆕 Enhanced Sorting:** Orders sorted by request date, then PO create date, then order number
-- [ ] **Configuration:** UI settings properly affect calculations (zero buffer default)
-- [ ] **Unparseable Dates:** Orders with invalid dates processed with "Invalid Date" status
-- [ ] **🆕 Partial Fulfillment:** All orders processed, none skipped due to insufficient inventory
-- [ ] **🆕 Future Flight Usage:** System accepts and uses any future flights regardless of timing
-- [ ] **🆕 Multiple Date Display:** Orders with multiple flights show multiple pulling and delivery dates
-- [ ] **🆕 Column Ordering:** Priority columns appear first (Order#, Cust Code, PO, Item, Part ID, etc.)
-- [ ] **Stock Consumption Tracking:** Stock Before/After columns show correct progression through FIFO sequence
-- [ ] **Taiwan Calendar Integration:** All date calculations use Taiwan working calendar
-- [ ] **Enhanced Pulling Logic:** Pulling dates respect Mon/Wed rule and Taiwan working days
-- [ ] **Zero Buffer Default:** In-stock orders deliver same day or next working day
-- [ ] **Part Matching:** Only exact match or "-A" postfix variations allowed
-- [ ] **🆕 Enhanced Results Display:** Summary statistics show realistic partial fulfillment breakdown
-- [ ] **🆕 Excel Download:** Downloaded file contains reordered columns with multiple date format
-- [ ] **🆕 Enhanced Processing Log:** Detailed logging of sorting decisions, allocation process, and multiple date calculations
-- [ ] **Error Handling:** Appropriate handling of invalid data, variable scope issues resolved
-- [ ] **🆕 Multi-Date Hover:** Date columns expand on hover to show complete details
+### 10.1 Core Functionality Validation
 
-## 11. KEY IMPROVEMENTS IN v2.7
+When verifying browser-based results, check:
+
+-   [ ] **File Upload:** All three file types upload successfully with visual confirmation
+-   [ ] **🆕 Enhanced Sorting:** Orders sorted by request date, then PO create date, then order number
+-   [ ] **Configuration:** UI settings properly affect calculations (zero buffer default)
+-   [ ] **Unparseable Dates:** Orders with invalid dates processed with "Invalid Date" status
+-   [ ] **🆕 Partial Fulfillment:** All orders processed, none skipped due to insufficient inventory
+-   [ ] **🆕 Future Flight Usage:** System accepts and uses any future flights regardless of timing
+-   [ ] **🆕 Flight Date Interpretation:** System treats flight dates as departure dates, not arrival dates
+-   [ ] **🆕 Flight Processing Sequence:** Proper sequence from departure → arrival → customs → pulling
+-   [ ] **🆕 Weekend Flight Restriction:** Saturday/Sunday departures cannot pull Monday, only Wednesday
+-   [ ] **🆕 Stock Delivery Direction:** Weekend/holiday requests deliver on previous working day (not next)
+-   [ ] **🆕 Multiple Date Display:** Orders with multiple flights show multiple pulling and delivery dates
+-   [ ] **🆕 Column Ordering:** Priority columns appear first (Order#, Cust Code, PO, Item, Part ID, etc.)
+-   [ ] **Stock Consumption Tracking:** Stock Before/After columns show correct progression through FIFO sequence
+-   [ ] **Taiwan Calendar Integration:** All date calculations use Taiwan working calendar
+-   [ ] **Enhanced Pulling Logic:** Pulling dates respect Mon/Wed rule and Taiwan working days
+-   [ ] **Zero Buffer Default:** In-stock orders deliver same day or previous working day for weekends/holidays
+-   [ ] **Customs Clearance Integration:** Flight processing includes proper customs clearance timing (1 business day)
+-   [ ] **Part Matching:** Only exact match or "-A" postfix variations allowed
+-   [ ] **🆕 Enhanced Results Display:** Summary statistics show realistic partial fulfillment breakdown
+-   [ ] **🆕 Excel Download:** Downloaded file contains reordered columns with multiple date format
+-   [ ] **🆕 Enhanced Processing Log:** Detailed logging of sorting decisions, allocation process, and multiple date calculations
+-   [ ] **Error Handling:** Appropriate handling of invalid data, variable scope issues resolved
+-   [ ] **🆕 Multi-Date Hover:** Date columns expand on hover to show complete details
+
+### 10.2 Expected Date Behaviors
+
+-   [ ] **Stock order on Friday → Deliver Friday** (working day)
+-   [ ] **Stock order on Saturday → Deliver Friday** (previous working day)
+-   [ ] **Stock order on Sunday → Deliver Friday** (previous working day)
+-   [ ] **Stock order on holiday → Deliver previous working day**
+-   [ ] **Flight departs Friday → Can pull Monday** (if working day)
+-   [ ] **Flight departs Saturday → Cannot pull Monday, must wait until Wednesday**
+-   [ ] **Flight departs Sunday → Cannot pull Monday, must wait until Wednesday**
+
+### 10.3 Expected Changes After Code Updates
+
+-   [ ] **Stock Delivery Date Changes:** Any status containing "Stock" or delivery dates containing "(stock)"
+-   [ ] **Flight Delivery Date Changes:** Orders with Flight Qty Used > 0 or delivery dates containing "(flight)"
+-   [ ] **No Changes for "No Inventory Available":** These orders should remain identical
+-   [ ] **No Changes for "Invalid Date":** These orders should remain identical
+-   [ ] **No Changes to Quantity Fields:** All qty fields should remain identical (unless there's a bug)
+-   [ ] **No Changes to Input Data:** PO, Item, Part ID, Request Date, PO Create Date should remain identical
+
+## 11. KEY IMPROVEMENTS IN v2.8
 
 ### 11.1 **🆕 Partial Fulfillment Logic**
 - **No More Skipped Orders:** Every order is processed and fulfilled to maximum extent possible
@@ -523,6 +629,10 @@ When verifying browser-based results, check:
 - ✅ **Operational Efficiency:** Detailed planning for warehouse operations
 - ✅ **Realistic Expectations:** Accurate delivery date communication
 - ✅ **Partial Shipments:** Enable delivery of available quantities without waiting
+- ✅ **Accurate Flight Processing:** Proper sequence from departure → arrival → customs → pulling
+- ✅ **Realistic Weekend Handling:** Stock deliveries move to previous working day for weekend requests
+- ✅ **Enhanced Flight Restrictions:** Weekend departures properly restrict Monday pulling
+- ✅ **Improved Date Accuracy:** All date calculations respect Taiwan business calendar and customs processing
 
 ## 12. BROWSER-SPECIFIC FEATURES
 
@@ -550,8 +660,119 @@ When verifying browser-based results, check:
 - **Column Reordering:** Excel export matches browser display priorities
 - **Professional Formatting:** Business-ready output for customer communication
 
+##13. RESULT COMPARISON AND VALIDATION
+-------------------------------------
+
+### 13.1 Expected Changes After Code Updates
+
+When comparing before/after results, the following changes are expected and indicate correct system behavior:
+
+**Stock Delivery Date Changes (EXPECTED):**
+
+-   Orders with any status containing "Stock" (In Stock, Partial Stock Only, Partial Stock + Flight)
+-   Orders with delivery dates containing "(stock)" identifier
+-   Weekend/holiday requests: dates move backward to previous working day
+-   Working day requests: typically no change (unless buffer days configured)
+-   Examples: Saturday request 2025-12-13 → Friday delivery 2025-12-12
+
+**Flight Delivery Date Changes (EXPECTED):**
+
+-   Orders with Flight Qty Used > 0 or delivery dates containing "(flight)"
+-   All flight-based dates recalculated using departure-based logic with customs clearance
+-   Weekend flight departures: pulling dates avoid Monday, use Wednesday
+-   Flight processing sequence: departure → arrival → customs → pulling → delivery
+-   Examples: Saturday departure → Wednesday pulling (Monday skipped)
+
+**No Changes Expected (UNCHANGED):**
+
+-   Orders with status "No Inventory Available" (no inventory = no date calculations)
+-   Orders with status "Invalid Date" (unparseable dates remain invalid)
+-   All quantity fields (Required Qty, Stock Used, Flight Qty Used, Available Qty, etc.)
+-   Input data fields (PO, Item, Part ID, Request Date, PO Create Date)
+-   Order processing sequence and allocation amounts
+
+### 13.2 Comparison Tool Classification Logic
+
+For automated comparison tools, use this enhanced logic to properly classify changes:
+
+```
+static String determineChangeType(String field, String beforeValue, String afterValue, String status) {
+    // Expected changes for any orders using stock
+    if ("Estimated Delivery Dates".equals(field)) {
+        // Any status that contains "Stock" or has "(stock)" in delivery dates
+        if (status.contains("Stock") ||
+            beforeValue.contains("(stock)") ||
+            afterValue.contains("(stock)")) {
+            return "EXPECTED-STOCK";
+        }
+
+        // Flight-based changes
+        if (status.contains("Flight") || status.contains("Awaiting") ||
+            beforeValue.contains("(flight)") || afterValue.contains("(flight)")) {
+            return "EXPECTED-FLIGHT";
+        }
+    }
+
+    // Pulling date changes (always flight-related)
+    if ("Pulling Dates".equals(field)) {
+        return "EXPECTED-FLIGHT";
+    }
+
+    // Fields that should never change (data corruption indicators)
+    if (Arrays.asList("Order Number", "PO", "Item", "Part ID", "Required Qty",
+                     "Request Date", "PO Create Date").contains(field)) {
+        return "ERROR";
+    }
+
+    return "UNEXPECTED";
+}
+
+```
+
+### 13.3 Validation Summary Guidelines
+
+**Successful Validation Indicators:**
+
+-   Total orders processed remains identical (no data loss)
+-   "No Inventory Available" and "Invalid Date" orders unchanged
+-   Stock delivery date changes follow backward adjustment pattern
+-   Flight delivery date changes reflect new departure-based logic
+-   All quantity allocations remain mathematically consistent
+-   Input data fields remain completely unchanged
+
+**Warning Indicators:**
+
+-   Changes to "No Inventory Available" status orders
+-   Changes to "Invalid Date" status orders
+-   Modifications to quantity fields without corresponding status changes
+-   Alterations to input data fields (PO, Item, Part ID, dates)
+
+**Error Indicators:**
+
+-   Total order count changes
+-   Mathematical inconsistencies in allocations
+-   Stock/flight quantity consumption errors
+-   Corrupted input data fields
+
+### 13.4 Business Logic Verification
+
+**Date Calculation Verification:**
+
+-   Stock deliveries on weekends move to Friday (previous working day)
+-   Flight departures on weekends cannot pull Monday (use Wednesday)
+-   All Taiwan holidays properly excluded from working day calculations
+-   Customs clearance properly integrated (1 business day, Monday-Saturday)
+
+**Partial Fulfillment Verification:**
+
+-   No orders completely skipped due to insufficient inventory
+-   Maximum possible fulfillment achieved using all available sources
+-   Multiple delivery dates properly calculated and displayed
+-   Stock consumption tracking accurate throughout FIFO sequence
+
+This section provides comprehensive guidance for validating the enhanced partial fulfillment system and ensuring all changes align with business requirements.
 ---
 
-**Current Version:** This Partial Fulfillment Edition v2.7 represents a major advancement in order processing capabilities. The system now fulfills orders to the maximum extent possible using all available inventory sources, provides detailed multiple delivery date tracking, and implements enhanced multi-level sorting for fair order prioritization. 
+**Current Version:** This Partial Fulfillment Edition v2.8 represents a major advancement in order processing capabilities. The system now fulfills orders to the maximum extent possible using all available inventory sources, provides detailed multiple delivery date tracking, and implements enhanced multi-level sorting for fair order prioritization. 
 
 **Key Innovation:** The implementation of partial fulfillment logic with multiple delivery date support enables businesses to maximize order fulfillment and provide accurate delivery schedules for complex orders spanning multiple

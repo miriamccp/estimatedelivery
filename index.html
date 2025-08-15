@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Date Estimator v2.7 - Partial Fulfillment Edition</title>
+    <title>Delivery Date Estimator v2.8 - Partial Fulfillment Edition</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -247,7 +247,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📦 Delivery Date Estimator v2.7</h1>
+            <h1>📦 Delivery Date Estimator v2.8</h1>
             <p>🚀 Partial Fulfillment - Multiple Flight Tracking Edition</p>
         </div>
 
@@ -279,7 +279,7 @@
                 <div class="upload-card" id="flight-card">
                     <h3>✈️ Flight Information</h3>
                     <p>Upload flight file <code>onflight.xlsx</code><br>
-                    Contains: part no, date (arrival), qty</p>
+                    Contains: part no, date (departure), qty</p>
                     <input type="file" id="flight-file" class="file-input" accept=".xlsx,.xls">
                     <button class="upload-btn" onclick="triggerFileInput('flight-file')">
                         📁 Select Flight File
@@ -302,7 +302,7 @@
                     </div>
                     <div class="config-item">
                         <label for="pulling-lead-days">Pulling Lead Days</label>
-                        <input type="number" id="pulling-lead-days" value="2" min="1" max="10">
+                        <input type="number" id="pulling-lead-days" value="1" min="1" max="10">
                     </div>
                     <div class="config-item">
                         <label for="delivery-lead-days">Delivery Lead Days</label>
@@ -348,7 +348,7 @@
 
     <script>
         // ===== GLOBAL VARIABLES =====
-        console.log('🚀 Loading Partial Fulfillment Delivery Estimator v2.7...');
+        console.log('🚀 Loading Partial Fulfillment Delivery Estimator v2.8...');
         
         let orderFiles = [];
         let stockFile = null;
@@ -791,51 +791,51 @@
             
             const headers = data[0];
             const partIdIndex = findColumnIndex(headers, 'part no', 'part_no', 'partno', 'partid', 'part_id');
-            const arrivalDateIndex = findColumnIndex(headers, 'date', 'arrival', 'flight_date', 'arrival_date');
-            const quantityIndex = findColumnIndex(headers, 'qty', 'quantity', 'flight_qty', 'arrival_qty');
+            const departureDateIndex = findColumnIndex(headers, 'date', 'departure', 'flight_date', 'departure_date');
+            const quantityIndex = findColumnIndex(headers, 'qty', 'quantity', 'flight_qty', 'departure_qty');
             
-            const flightArrivalsMap = {};
+            const flightDeparturesMap = {};
             
             for (let i = 1; i < data.length; i++) {
                 const row = data[i];
                 if (!row || row.length === 0) continue;
                 
                 const partId = row[partIdIndex];
-                const dateValue = row[arrivalDateIndex];
+                const dateValue = row[departureDateIndex];
                 const quantity = parseInt(row[quantityIndex]) || 0;
                 
                 if (partId && quantity > 0) {
-                    const arrivalDate = parseDate(dateValue);
+                    const departureDate = parseDate(dateValue);
                     const originalDateString = String(dateValue || 'NULL');
                     
                     const partKey = String(partId);
-                    if (!flightArrivalsMap[partKey]) {
-                        flightArrivalsMap[partKey] = [];
+                    if (!flightDeparturesMap[partKey]) {
+                        flightDeparturesMap[partKey] = [];
                     }
                     
-                    flightArrivalsMap[partKey].push({
+                    flightDeparturesMap[partKey].push({
                         partId: partKey,
-                        arrivalDate: arrivalDate,
+                        departureDate: departureDate,
                         quantity: quantity,
                         originalDateString: originalDateString
                     });
                 }
             }
             
-            // Sort flight arrivals by date for each part
-            for (const arrivals of Object.values(flightArrivalsMap)) {
-                arrivals.sort((a, b) => {
-                    if (!a.arrivalDate && !b.arrivalDate) return 0;
-                    if (!a.arrivalDate) return 1;
-                    if (!b.arrivalDate) return -1;
-                    return a.arrivalDate.getTime() - b.arrivalDate.getTime();
+            // Sort flight departures by date for each part
+            for (const departures of Object.values(flightDeparturesMap)) {
+                departures.sort((a, b) => {
+                    if (!a.departureDate && !b.departureDate) return 0;
+                    if (!a.departureDate) return 1;
+                    if (!b.departureDate) return -1;
+                    return a.departureDate.getTime() - b.departureDate.getTime();
                 });
             }
             
-            const totalFlightRecords = Object.values(flightArrivalsMap).reduce((sum, arr) => sum + arr.length, 0);
-            log(`Loaded ${totalFlightRecords} flight arrival records for ${Object.keys(flightArrivalsMap).size} unique parts`);
-            console.log('✈️ Flight map sample:', Object.keys(flightArrivalsMap).slice(0, 5), 'Total parts:', Object.keys(flightArrivalsMap).length);
-            return flightArrivalsMap;
+            const totalFlightRecords = Object.values(flightDeparturesMap).reduce((sum, arr) => sum + arr.length, 0);
+            log(`Loaded ${totalFlightRecords} flight departure records for ${Object.keys(flightDeparturesMap).size} unique parts`);
+            console.log('✈️ Flight map sample:', Object.keys(flightDeparturesMap).slice(0, 5), 'Total parts:', Object.keys(flightDeparturesMap).length);
+            return flightDeparturesMap;
         }
 
         // ===== PARTIAL FULFILLMENT ALLOCATION LOGIC =====
@@ -871,7 +871,7 @@
                     stockDeliveryDate.setDate(stockDeliveryDate.getDate() + bufferDays);
                 }
                 while (!isTaiwanWorkingDay(stockDeliveryDate)) {
-                    stockDeliveryDate.setDate(stockDeliveryDate.getDate() + 1);
+                    stockDeliveryDate.setDate(stockDeliveryDate.getDate() - 1);
                 }
                 
                 deliveryDates.push({
@@ -890,23 +890,23 @@
                 for (const flight of flights) {
                     if (remainingNeeded <= 0) break;
                     
-                    if (!flight.arrivalDate) {
+                    if (!flight.departureDate) {
                         console.log(`❌ Skipping flight with invalid date: ${flight.originalDateString}`);
                         continue;
                     }
                     
                     // Accept ANY flight in the future (no buffer day restrictions)
-                    const daysFromOrder = calculateDaysBetween(order.requestDate, flight.arrivalDate);
-                    console.log(`✈️ Checking flight ${formatDate(flight.arrivalDate)}: ${daysFromOrder} days from order date`);
+                    const daysFromOrder = calculateDaysBetween(order.requestDate, flight.departureDate);
+                    console.log(`✈️ Checking flight ${formatDate(flight.departureDate)}: ${daysFromOrder} days from order date`);
                     
                     const quantityToUse = Math.min(flight.quantity, remainingNeeded);
                     if (quantityToUse > 0) {
                         // Calculate pulling and delivery dates for this flight
-                        const flightPullingDate = calculatePullingDate(flight.arrivalDate);
+                        const flightPullingDate = calculatePullingDate(flight.departureDate);
                         const flightDeliveryDate = calculateDeliveryFromPulling(flightPullingDate);
                         
                         usedFlights.push({ 
-                            date: flight.arrivalDate, 
+                            date: flight.departureDate, 
                             quantityUsed: quantityToUse,
                             originalQuantity: flight.quantity,
                             pullingDate: flightPullingDate,
@@ -916,23 +916,23 @@
                         pullingDates.push({
                             quantity: quantityToUse,
                             date: flightPullingDate,
-                            flightDate: flight.arrivalDate
+                            flightDate: flight.departureDate
                         });
                         
                         deliveryDates.push({
                             quantity: quantityToUse,
                             date: flightDeliveryDate,
                             type: 'flight',
-                            flightDate: flight.arrivalDate
+                            flightDate: flight.departureDate
                         });
                         
                         flightQtyUsed += quantityToUse;
                         remainingNeeded -= quantityToUse;
-                        lastFlightDate = flight.arrivalDate;
+                        lastFlightDate = flight.departureDate;
                         
                         const daysLateText = daysFromOrder > 0 ? ` (+${daysFromOrder}d)` : '';
-                        flightDetails.push(`${quantityToUse}×${formatDate(flight.arrivalDate)}${daysLateText}`);
-                        console.log(`✅ Using ${quantityToUse} from flight ${formatDate(flight.arrivalDate)} (${daysFromOrder} days from order)`);
+                        flightDetails.push(`${quantityToUse}×${formatDate(flight.departureDate)}${daysLateText}`);
+                        console.log(`✅ Using ${quantityToUse} from flight ${formatDate(flight.departureDate)} (${daysFromOrder} days from order)`);
                     }
                 }
             }
@@ -953,7 +953,7 @@
                     notes = `Fully fulfilled from stock: ${stockUsed}`;
                 } else {
                     status = 'Awaiting Flight';
-                    notes = `Fully fulfilled from flights: ${flightQtyUsed} (last arrival: ${formatDate(lastFlightDate)})`;
+                    notes = `Fully fulfilled from flights: ${flightQtyUsed} (last departure: ${formatDate(lastFlightDate)})`;
                 }
             } else if (totalFulfilled > 0) {
                 if (stockUsed > 0 && flightQtyUsed > 0) {
@@ -964,7 +964,7 @@
                     notes = `Partially fulfilled from stock: ${totalFulfilled}/${order.requiredQuantity}. Remaining: ${remainingUnfulfilled}`;
                 } else {
                     status = 'Partial Flight Only';
-                    notes = `Partially fulfilled from flights: ${totalFulfilled}/${order.requiredQuantity} (last arrival: ${formatDate(lastFlightDate)}). Remaining: ${remainingUnfulfilled}`;
+                    notes = `Partially fulfilled from flights: ${totalFulfilled}/${order.requiredQuantity} (last departure: ${formatDate(lastFlightDate)}). Remaining: ${remainingUnfulfilled}`;
                 }
             } else {
                 status = 'No Inventory Available';
@@ -1002,11 +1002,11 @@
             if (allocation.flightQtyUsed > 0 && allocation.flightPartId && remainingFlights[allocation.flightPartId]) {
                 for (const usage of allocation.usedFlights) {
                     for (const flight of remainingFlights[allocation.flightPartId]) {
-                        if (flight.arrivalDate && usage.date && 
-                            flight.arrivalDate.getTime() === usage.date.getTime() && flight.quantity > 0) {
+                        if (flight.departureDate && usage.date && 
+                            flight.departureDate.getTime() === usage.date.getTime() && flight.quantity > 0) {
                             const before = flight.quantity;
                             flight.quantity -= usage.quantityUsed;
-                            console.log(`✈️ Flight consumed: ${allocation.flightPartId} ${formatDate(flight.arrivalDate)} ${before} -> ${flight.quantity} (-${usage.quantityUsed})`);
+                            console.log(`✈️ Flight consumed: ${allocation.flightPartId} ${formatDate(flight.departureDate)} ${before} -> ${flight.quantity} (-${usage.quantityUsed})`);
                             break;
                         }
                     }
@@ -1037,19 +1037,41 @@
             return nextDay.getMonth() !== date.getMonth();
         }
 
-        function calculatePullingDate(flightArrivalDate) {
-            const pullingLeadDays = parseInt(document.getElementById('pulling-lead-days').value) || 2;
-            const candidateDate = addWorkingDays(flightArrivalDate, pullingLeadDays);
-            let pullingDate = findNextPullingDay(candidateDate);
-            
-            while (isLastDayOfMonth(pullingDate)) {
-                const nextDay = new Date(pullingDate);
-                nextDay.setDate(nextDay.getDate() + 1);
-                pullingDate = findNextPullingDay(nextDay);
-            }
-            
-            return pullingDate;
-        }
+		function calculatePullingDate(flightDepartureDate) {
+			const departureDay = flightDepartureDate.getDay(); // 0=Sun, 6=Sat
+			
+			// If flight departs on weekend (Sat/Sun), cannot pull Monday
+			const canPullMonday = !(departureDay === 0 || departureDay === 6);
+			
+			// Start from day after departure
+			let candidateDate = new Date(flightDepartureDate);
+			candidateDate.setDate(candidateDate.getDate() + 1);
+			
+			// Find next valid pulling date
+			while (true) {
+				const dayOfWeek = candidateDate.getDay();
+				
+				// Check if it's Monday or Wednesday
+				const isMondayOrWednesday = (dayOfWeek === 1) || (dayOfWeek === 3);
+				
+				if (isMondayOrWednesday) {
+					// Check Monday weekend flight restriction
+					if (dayOfWeek === 1 && !canPullMonday) {
+						candidateDate.setDate(candidateDate.getDate() + 1);
+						continue;
+					}
+					
+					// Check if it's working day (not holiday) and not last day of month
+					if (isTaiwanWorkingDay(candidateDate) && !isLastDayOfMonth(candidateDate)) {
+						break; // Found valid pulling date
+					}
+				}
+				
+				candidateDate.setDate(candidateDate.getDate() + 1);
+			}
+			
+			return candidateDate;
+		}
 
         function calculateDeliveryFromPulling(pullingDate) {
             const deliveryLeadDays = parseInt(document.getElementById('delivery-lead-days').value) || 2;
@@ -1071,7 +1093,7 @@
                 
                 const bufferDays = parseInt(document.getElementById('buffer-days').value) || 0;
                 const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
-                const pullingLeadDays = parseInt(document.getElementById('pulling-lead-days').value) || 2;
+                const pullingLeadDays = parseInt(document.getElementById('pulling-lead-days').value) || 1;
                 const deliveryLeadDays = parseInt(document.getElementById('delivery-lead-days').value) || 2;
                 
                 log(`⚙️ Configuration: Buffer=${bufferDays}d, FlightBuffer=${flightBufferDays}d, Pulling=${pullingLeadDays}d, Delivery=${deliveryLeadDays}d`);
@@ -1082,7 +1104,7 @@
                 const partStockMap = await loadPartStock();
                 updateProgress(50);
                 
-                const flightArrivalsMap = await loadFlightInfo();
+                const flightDeparturesMap = await loadFlightInfo();
                 updateProgress(70);
                 
                 // PARTIAL FULFILLMENT ALLOCATION LOGIC
@@ -1117,7 +1139,7 @@
                 // Create working copies for allocation tracking
                 const remainingStock = { ...partStockMap };
                 const remainingFlights = {};
-                for (const [partId, flights] of Object.entries(flightArrivalsMap)) {
+                for (const [partId, flights] of Object.entries(flightDeparturesMap)) {
                     remainingFlights[partId] = flights.map(f => ({ ...f }));
                 }
                 
@@ -1405,7 +1427,7 @@
             }
 
             console.log('🎉 Partial Fulfillment system initialized - ready for processing!');
-            log('🚀 Partial Fulfillment Delivery Estimator v2.7 initialized successfully!');
+            log('🚀 Partial Fulfillment Delivery Estimator v2.8 initialized successfully!');
         });
 
         console.log('✅ Partial Fulfillment Script loaded - all functions available!');

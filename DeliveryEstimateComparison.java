@@ -1,5 +1,3 @@
-
-
 import java.io.*;
 import java.util.*;
 
@@ -40,18 +38,20 @@ public class DeliveryEstimateComparison {
     }
     
     public static void main(String[] args) {
-//        if (args.length != 2) {
-//            System.out.println("Usage: java DeliveryEstimateComparison <before.csv> <after.csv>");
-//            System.out.println("Example: java DeliveryEstimateComparison delivery_estimates_before.csv delivery_estimates_after.csv");
-//            return;
-//        }
-        
-        String beforeFile = "delivery_estimates_before.csv";
-        String afterFile = "delivery_estimates_after.csv";
+		// if (args.length != 2) {
+		// System.out.println("Usage: java DeliveryEstimateComparison <before.csv>
+		// <after.csv>");
+		// System.out.println("Example: java DeliveryEstimateComparison
+		// delivery_estimates_before.csv delivery_estimates_after.csv");
+		// return;
+		// }
+
+		String beforeFile = "delivery_estimates_before.csv";
+		String afterFile = "delivery_estimates_after.csv";
         
         try {
-            Map<String, OrderData> beforeData = loadCSV(beforeFile);
-            Map<String, OrderData> afterData = loadCSV(afterFile);
+            Map<String, OrderData> beforeData = loadCSVRobust(beforeFile);
+            Map<String, OrderData> afterData = loadCSVRobust(afterFile);
             
             System.out.println("=== DELIVERY ESTIMATE COMPARISON REPORT ===");
             System.out.println("Before file: " + beforeFile + " (" + beforeData.size() + " orders)");
@@ -66,14 +66,14 @@ public class DeliveryEstimateComparison {
         }
     }
     
-    static Map<String, OrderData> loadCSV(String filename) throws IOException {
+    static Map<String, OrderData> loadCSVRobust(String filename) throws IOException {
         Map<String, OrderData> data = new HashMap<>();
         
         try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
             String line = reader.readLine();
             if (line == null) throw new IOException("Empty file: " + filename);
             
-            String[] headers = line.split(",");
+            String[] headers = parseCSVLineRobust(line);
             
             // Clean headers
             for (int i = 0; i < headers.length; i++) {
@@ -81,37 +81,79 @@ public class DeliveryEstimateComparison {
             }
             
             int lineNum = 1;
+            int processedOrders = 0;
+            
             while ((line = reader.readLine()) != null) {
                 lineNum++;
-                String[] values = parseCSVLine(line);
                 
-                if (values.length < headers.length) {
-                    System.err.println("Warning: Line " + lineNum + " has fewer values than headers. Skipping.");
+                // Skip completely empty lines
+                if (line.trim().isEmpty()) {
                     continue;
                 }
                 
-                OrderData order = new OrderData();
-                for (int i = 0; i < headers.length && i < values.length; i++) {
-                    order.put(headers[i], values[i]);
+                try {
+                    String[] values = parseCSVLineRobust(line);
+                    
+                    // Must have at least basic required fields
+                    if (values.length >= 3) {
+                        OrderData order = new OrderData();
+                        
+                        // Fill all available fields
+                        for (int i = 0; i < headers.length && i < values.length; i++) {
+                            order.put(headers[i], values[i]);
+                        }
+                        
+                        // Create unique key: Order Number (fallback to line number if missing)
+                        String orderNum = order.get("Order Number");
+                        String po = order.get("PO");
+                        String item = order.get("Item");
+                        String partId = order.get("Part ID");
+                        
+                        String key;
+                        if (!orderNum.isEmpty()) {
+                            key = orderNum + "|" + po + "|" + partId;
+                        } else {
+                            key = "LINE_" + lineNum + "|" + po + "|" + partId;
+                        }
+                        
+                        data.put(key, order);
+                        processedOrders++;
+                    }
+                } catch (Exception e) {
+                    System.err.println("Warning: Could not parse line " + lineNum + " in " + filename + ": " + e.getMessage());
+                    System.err.println("Line content: " + line);
+                    // Continue processing other lines
                 }
-                
-                // Create unique key: PO + Item + Part ID
-                String key = order.get("PO") + "|" + order.get("Item") + "|" + order.get("Part ID");
-                data.put(key, order);
             }
+            
+            System.out.println("Processed " + processedOrders + " orders from " + filename);
         }
         
         return data;
     }
     
-    static String[] parseCSVLine(String line) {
+    static String[] parseCSVLineRobust(String line) {
         List<String> values = new ArrayList<>();
         boolean inQuotes = false;
+        boolean escapeNext = false;
         StringBuilder current = new StringBuilder();
         
-        for (char c : line.toCharArray()) {
-            if (c == '"') {
-                inQuotes = !inQuotes;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            
+            if (escapeNext) {
+                current.append(c);
+                escapeNext = false;
+            } else if (c == '\\') {
+                escapeNext = true;
+            } else if (c == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    // Double quote - add single quote
+                    current.append('"');
+                    i++; // Skip next quote
+                } else {
+                    inQuotes = !inQuotes;
+                }
             } else if (c == ',' && !inQuotes) {
                 values.add(current.toString().trim());
                 current = new StringBuilder();
@@ -119,14 +161,23 @@ public class DeliveryEstimateComparison {
                 current.append(c);
             }
         }
+        
+        // Add final value
         values.add(current.toString().trim());
+        
+        // Clean up values - remove surrounding quotes
+        for (int i = 0; i < values.size(); i++) {
+            String value = values.get(i);
+            if (value.startsWith("\"") && value.endsWith("\"") && value.length() > 1) {
+                values.set(i, value.substring(1, value.length() - 1));
+            }
+        }
         
         return values.toArray(new String[0]);
     }
     
     static void compareData(Map<String, OrderData> beforeData, Map<String, OrderData> afterData) {
         List<ComparisonResult> differences = new ArrayList<>();
-        List<String> summaryStats = new ArrayList<>();
         
         // Key fields to compare
         String[] keyFields = {
@@ -135,16 +186,26 @@ public class DeliveryEstimateComparison {
             "Stock Used", "Flight Qty Used", "Available Qty", "Fulfilled Qty", "Remaining Qty"
         };
         
-        int totalOrders = beforeData.size();
+        int totalOrders = Math.max(beforeData.size(), afterData.size());
         int changedOrders = 0;
         int unchangedOrders = 0;
         
         Map<String, Integer> changesByStatus = new HashMap<>();
         Map<String, Integer> changesByField = new HashMap<>();
         
-        for (String key : beforeData.keySet()) {
+        // Check all orders from both files
+        Set<String> allKeys = new HashSet<>();
+        allKeys.addAll(beforeData.keySet());
+        allKeys.addAll(afterData.keySet());
+        
+        for (String key : allKeys) {
             OrderData before = beforeData.get(key);
             OrderData after = afterData.get(key);
+            
+            if (before == null) {
+                differences.add(new ComparisonResult(key, "MISSING", "NOT FOUND", "EXISTS", "ERROR"));
+                continue;
+            }
             
             if (after == null) {
                 differences.add(new ComparisonResult(key, "MISSING", "EXISTS", "NOT FOUND", "ERROR"));
@@ -229,7 +290,7 @@ public class DeliveryEstimateComparison {
     }
     
     static String determineChangeType(String field, String beforeValue, String afterValue, String status) {
-    	// Expected changes for any orders using stock
+        // Expected changes for any orders using stock (FIXED VERSION)
         if ("Estimated Delivery Dates".equals(field)) {
             // Any status that contains "Stock" or has "(stock)" in delivery dates
             if (status.contains("Stock") || 
@@ -237,13 +298,17 @@ public class DeliveryEstimateComparison {
                 afterValue.contains("(stock)")) {
                 return "EXPECTED-STOCK";
             }
-        }
-        
-        // Expected changes for flight-based orders
-        if (field.equals("Pulling Dates") || field.equals("Estimated Delivery Dates")) {
-            if (status.contains("Flight") || status.contains("Awaiting")) {
+            
+            // Flight-based changes
+            if (status.contains("Flight") || status.contains("Awaiting") ||
+                beforeValue.contains("(flight)") || afterValue.contains("(flight)")) {
                 return "EXPECTED-FLIGHT";
             }
+        }
+        
+        // Pulling date changes (always flight-related)
+        if ("Pulling Dates".equals(field)) {
+            return "EXPECTED-FLIGHT";
         }
         
         // Fields that should never change
@@ -257,7 +322,7 @@ public class DeliveryEstimateComparison {
     
     static void validateChanges(Map<String, Integer> changesByStatus, Map<String, Integer> changesByField) {
         System.out.println("Expected changes:");
-        System.out.println("✓ 'In Stock' orders should have delivery date changes");
+        System.out.println("✓ Stock orders should have delivery date changes");
         System.out.println("✓ Flight-based orders should have pulling/delivery date changes");
         
         System.out.println("\nUnexpected changes:");

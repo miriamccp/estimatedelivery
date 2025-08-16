@@ -288,7 +288,7 @@
                 </div>
             </div>
 
-            <!-- Configuration Section -->
+            <!-- Configuration Section
             <div class="config-section">
                 <h3>⚙️ Configuration</h3>
                 <div class="config-grid">
@@ -300,17 +300,14 @@
                         <label for="flight-buffer-days">Flight Buffer Days (Max Late)</label>
                         <input type="number" id="flight-buffer-days" value="0" min="0" max="30">
                     </div>
-                    <div class="config-item">
-                        <label for="pulling-lead-days">Pulling Lead Days</label>
-                        <input type="number" id="pulling-lead-days" value="1" min="1" max="10">
-                    </div>
-                    <div class="config-item">
+                      <div class="config-item">
                         <label for="delivery-lead-days">Delivery Lead Days</label>
                         <input type="number" id="delivery-lead-days" value="2" min="1" max="10">
                     </div>
                 </div>
             </div>
-
+			-->
+			
             <button class="process-btn" id="process-btn" onclick="processFiles()" disabled>
                 🚀 Calculate Delivery Dates
             </button>
@@ -393,25 +390,24 @@
                 const excelData = estimatedResults.map(estimate => ({
                     'Order Number': estimate.orderNumber,
                     'Cust Code': estimate.custCode,
+					'Status': estimate.status,					
+					'PO Create Date': estimate.poCreateDate,					
                     'PO': estimate.po,
                     'Item': estimate.item,
                     'Part ID': estimate.partId,
                     'Required Qty': estimate.requiredQuantity,
                     'Request Date': estimate.requestDate,
+					'Lead Days': estimate.leadTimeDays,
                     'Estimated Delivery Dates': estimate.estimatedDeliveryDate,
+					'不足數量': estimate.remainingQuantity, 
+					'Flight Details': estimate.flightDetails,
                     'Pulling Dates': estimate.pullingDate || 'N/A',
-                    'Available Qty': estimate.availableQuantity,
                     'Fulfilled Qty': estimate.fulfilledQuantity,
-                    'Remaining Qty': estimate.remainingQuantity,
-                    'PO Create Date': estimate.poCreateDate,
-                    'Lead Time (Days)': estimate.leadTimeDays,
-                    'Status': estimate.status,
                     'Notes': estimate.notes,
                     'Stock Before': estimate.stockQtyBefore,
                     'Stock After': estimate.stockQtyAfter,
                     'Stock Used': estimate.stockUsed,
                     'Flight Qty Used': estimate.flightQtyUsed,
-                    'Flight Details': estimate.flightDetails,
                     'Warehouse Notes': estimate.warehouseNotes
                 }));
                 
@@ -866,7 +862,7 @@
                 
                 // Calculate stock delivery date
                 let stockDeliveryDate = new Date(order.requestDate);
-                const bufferDays = parseInt(document.getElementById('buffer-days').value) || 0;
+                const bufferDays = 0;
                 if (bufferDays > 0) {
                     stockDeliveryDate.setDate(stockDeliveryDate.getDate() + bufferDays);
                 }
@@ -1074,7 +1070,7 @@
 		}
 
         function calculateDeliveryFromPulling(pullingDate) {
-            const deliveryLeadDays = parseInt(document.getElementById('delivery-lead-days').value) || 2;
+            const deliveryLeadDays = 2;
             return addWorkingDays(pullingDate, deliveryLeadDays);
         }
 
@@ -1091,12 +1087,11 @@
                 updateProgress(10);
                 log('🚀 Starting Partial Fulfillment allocation logic...');
                 
-                const bufferDays = parseInt(document.getElementById('buffer-days').value) || 0;
-                const flightBufferDays = parseInt(document.getElementById('flight-buffer-days').value) || 0;
-                const pullingLeadDays = parseInt(document.getElementById('pulling-lead-days').value) || 1;
-                const deliveryLeadDays = parseInt(document.getElementById('delivery-lead-days').value) || 2;
+                const bufferDays =  0;
+                const flightBufferDays = 0;
+                const deliveryLeadDays = 2;
                 
-                log(`⚙️ Configuration: Buffer=${bufferDays}d, FlightBuffer=${flightBufferDays}d, Pulling=${pullingLeadDays}d, Delivery=${deliveryLeadDays}d`);
+                log(`⚙️ Configuration: Buffer=${bufferDays}d, FlightBuffer=${flightBufferDays}d, Delivery=${deliveryLeadDays}d`);
                 
                 const orders = await loadCustomerOrders();
                 updateProgress(30);

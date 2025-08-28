@@ -1,0 +1,675 @@
+openapi: 3.0.3
+info:
+  title: Fitness Console API
+  description: API specifications for vendors developing integrations with fitness equipment platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://support.anthropic.com
+servers:
+  - url: https://{brand}-homeplus-dev.dyacocloud.com/api
+    description: Development Environment
+    variables:
+      brand:
+        enum: [sole, xterra, spirit, fuel]
+        default: sole
+
+components:
+  schemas:
+    # Enums
+    UserAuthMethod:
+      type: integer
+      enum: [1, 2, 3, 4, 9, 10]
+      description: |
+        Authentication method codes:
+        * 1 - EMAIL_PWD
+        * 2 - GOOGLE  
+        * 3 - APPLE
+        * 4 - FACEBOOK
+        * 9 - PHONE_PWD
+        * 10 - WECHAT
+
+    Gender:
+      type: integer
+      enum: [0, 1]
+      description: |
+        Gender codes:
+        * 0 - Female
+        * 1 - Male
+
+    MeasurementSystem:
+      type: integer
+      enum: [0, 1]
+      description: |
+        Measurement system codes:
+        * 0 - Metric
+        * 1 - Imperial
+
+    CategoryType:
+      type: integer
+      enum: [0, 1, 2, 3, 4, 5, 6, 11, 12, 13]
+      description: |
+        Equipment category codes:
+        * 0 - TREADMILL
+        * 1 - BIKE
+        * 2 - ELLIPTICAL
+        * 3 - STEPPER
+        * 4 - ROWER
+        * 5 - SRVO
+        * 6 - VIDEO
+        * 11 - RECUMBENT_BIKE
+        * 12 - UPRIGHT_BIKE
+        * 13 - FLYWHEEL_BIKE
+
+    # Main Data Objects
+    LoginUserProfileOnMachineConsole:
+      type: object
+      properties:
+        userUuid:
+          type: string
+          description: User's unique identifier
+          example: "01047e81-b21d-4744-9684-44de1030d27c"
+        globalUserUuid:
+          type: string
+          description: Global user identifier across all platforms
+          example: "0d75881b-17ad-4bda-8813-d6eb79ed5171"
+        loginName:
+          type: string
+          description: User's login name
+          example: "aaa@gmail.com"
+        photoFileUrl:
+          type: string
+          nullable: true
+          description: URL to user's profile photo
+          example: "https://d3mw6orzdgzj8s.cloudfront.net/..."
+        avatarId:
+          type: string
+          nullable: true
+          description: Avatar identifier
+        registerType:
+          $ref: '#/components/schemas/UserAuthMethod'
+        email:
+          type: string
+          description: User's email address
+          example: "aaa@gmail.com"
+        lang:
+          type: string
+          description: User's language preference
+          example: "en"
+        birthDate:
+          type: string
+          format: date
+          description: Birth date in yyyy-MM-dd format
+          example: "1991-09-14"
+        gender:
+          $ref: '#/components/schemas/Gender'
+        displayName:
+          type: string
+          description: User's display name
+          example: "Allen Tsai"
+        weight:
+          type: string
+          description: User's weight in kg
+          example: "67"
+        measurementUnit:
+          $ref: '#/components/schemas/MeasurementSystem'
+        height:
+          type: string
+          description: User's height in cm
+          example: "180"
+
+    WorkoutRawData:
+      type: object
+      properties:
+        totalWorkoutTime:
+          type: integer
+          description: Elapsed workout time in seconds
+          example: 300
+        totalTimeLeft:
+          type: integer
+          description: Remaining workout time in seconds
+          example: 2400
+        nowHr:
+          type: number
+          format: double
+          nullable: true
+          description: Current heart rate (bpm)
+          example: 125.0
+        totalDistance:
+          type: number
+          format: double
+          nullable: true
+          description: Cumulative distance in km
+          example: 0.708
+        totalCalorie:
+          type: number
+          format: double
+          nullable: true
+          description: Cumulative calories burned
+          example: 28.0
+        nowSpeed:
+          type: number
+          format: double
+          nullable: true
+          description: Current speed (km/hr)
+          example: 8.5
+        nowIncline:
+          type: number
+          format: double
+          nullable: true
+          description: Current incline percentage (0-100)
+          example: 2.0
+        nowLevel:
+          type: integer
+          nullable: true
+          description: Current level (for elliptical)
+          example: 5
+        nowWatt:
+          type: number
+          format: double
+          nullable: true
+          description: Current power output
+          example: 150.0
+        avgSpmRower:
+          type: number
+          format: double
+          nullable: true
+          description: Average strokes per minute (rower)
+          example: 25.0
+        totalStrokes:
+          type: integer
+          nullable: true
+          description: Total stroke count (rower)
+          example: 125
+        avgRpm:
+          type: number
+          format: double
+          nullable: true
+          description: Average RPM (bike)
+          example: 85.0
+        totalFloor:
+          type: integer
+          nullable: true
+          description: Floor count (stepper)
+          example: 15
+        totalElevation:
+          type: number
+          format: double
+          nullable: true
+          description: Cumulative elevation in meters
+          example: 50.2
+        totalSteps:
+          type: integer
+          nullable: true
+          description: Cumulative step count
+          example: 850
+        curSpmStepper:
+          type: number
+          format: double
+          nullable: true
+          description: Current steps per minute (stepper)
+          example: 120.0
+        avgSpmStepper:
+          type: number
+          format: double
+          nullable: true
+          description: Average steps per minute (stepper)
+          example: 115.0
+
+    UploadWorkoutForm4Machine:
+      type: object
+      required:
+        - clientWorkoutUuid
+        - detailMachineCategoryType
+        - machineMac
+        - modelNameFromMachine
+        - startTime
+        - endTime
+        - startTimeMillis
+        - endTimeMillis
+        - programName
+        - totalTime
+        - totalDistance
+        - totalCalories
+        - timeZone
+      properties:
+        clientWorkoutUuid:
+          type: string
+          description: Client-generated unique workout ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        detailMachineCategoryType:
+          $ref: '#/components/schemas/CategoryType'
+        machineMac:
+          type: string
+          description: Machine's WiFi MAC address
+          example: "AA:BB:CC:DD:EE:FF"
+        modelNameFromMachine:
+          type: string
+          description: Machine model name
+          example: "Spirit XT185 Treadmill"
+        startTime:
+          type: string
+          format: date-time
+          description: Workout start time (local) - format yyyy-MM-dd HH:mm:ss
+          example: "2025-01-15 08:30:00"
+        endTime:
+          type: string
+          format: date-time
+          description: Workout end time (local) - format yyyy-MM-dd HH:mm:ss
+          example: "2025-01-15 09:15:00"
+        startTimeMillis:
+          type: integer
+          format: int64
+          description: Start time in milliseconds (UTC)
+          example: 1737795000000
+        endTimeMillis:
+          type: integer
+          format: int64
+          description: End time in milliseconds (UTC)
+          example: 1737797700000
+        programName:
+          type: string
+          description: Workout program name
+          example: "Fat Burn Program"
+        avgIncline:
+          type: number
+          format: double
+          nullable: true
+          description: Average incline percentage
+          example: 3.5
+        avgLevel:
+          type: number
+          format: double
+          nullable: true
+          description: Average level (for elliptical)
+          example: 5.0
+        avgHeartRate:
+          type: number
+          format: double
+          nullable: true
+          description: Average heart rate (bpm)
+          example: 145.7
+        avgMet:
+          type: number
+          format: double
+          nullable: true
+          description: Average metabolic equivalent
+          example: 8.2
+        avgSpeed:
+          type: number
+          format: double
+          nullable: true
+          description: Average speed (km/hr)
+          example: 8.5
+        avgWatt:
+          type: number
+          format: double
+          nullable: true
+          description: Average power output
+          example: 150.0
+        avgCadence:
+          type: number
+          format: double
+          nullable: true
+          description: Average cadence (spm/rpm)
+          example: 75.0
+        peakHeartRate:
+          type: number
+          format: double
+          nullable: true
+          description: Peak heart rate (bpm)
+          example: 168.0
+        vertical:
+          type: number
+          format: double
+          nullable: true
+          description: Vertical climb in meters
+          example: 100.5
+        totalTime:
+          type: integer
+          description: Total workout time in seconds
+          example: 2700
+        totalDistance:
+          type: number
+          format: double
+          description: Total distance in kilometers
+          example: 6.375
+        totalCalories:
+          type: integer
+          description: Total calories burned
+          example: 420
+        totalSteps:
+          type: integer
+          nullable: true
+          description: Total step count
+          example: 8500
+        totalElevation:
+          type: number
+          format: double
+          nullable: true
+          description: Total elevation gain in meters
+          example: 200.5
+        rawDataList:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkoutRawData'
+          nullable: true
+          description: Detailed workout progress data
+        timeZone:
+          type: string
+          description: Timezone identifier
+          example: "Asia/Taipei"
+
+    # Response Schemas
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        msg:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        errorCode:
+          type: integer
+          nullable: true
+        errorUuid:
+          type: string
+          nullable: true
+        dataMap:
+          type: object
+          nullable: true
+
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            dataMap:
+              type: object
+              properties:
+                data:
+                  $ref: '#/components/schemas/LoginUserProfileOnMachineConsole'
+                loginToken:
+                  type: string
+                  description: Token for background authentication
+                  example: "da33f79d-f1cb-4f83-8ee2-fa8cdddb608a"
+                serviceLoginToken:
+                  type: string
+                  description: JWT token for accessing related services
+
+    UserInfoResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            dataMap:
+              type: object
+              properties:
+                data:
+                  $ref: '#/components/schemas/LoginUserProfileOnMachineConsole'
+                serviceLoginToken:
+                  type: string
+                loginToken:
+                  type: string
+
+    WorkoutUploadResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            dataMap:
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: UUID of the uploaded workout record
+                  example: "812d3678-d714-40ce-8c12-114c2d00c42e"
+
+  # Request Headers
+  parameters:
+    RequiredHeaders:
+      in: header
+      required: true
+      schema:
+        type: object
+        required: [app, appVersion, now, nowMillis, timeZone, lang, clientDeviceId, deviceInfo]
+        properties:
+          app:
+            type: string
+            enum: [HOME_ANDROID, HOME_IPHONE, HOME_MACHINE_CONSOLE]
+            example: HOME_MACHINE_CONSOLE
+          appVersion:
+            type: string
+            example: "1.2.3"
+          now:
+            type: string
+            example: "2024-03-15 14:30:25"
+          nowMillis:
+            type: string
+            example: "1710508225000"
+          timeZone:
+            type: string
+            example: "Asia/Taipei"
+          lang:
+            type: string
+            example: "en"
+          clientDeviceId:
+            type: string
+            description: For consoles use machineConsoleUuid value
+            example: "2cd99b06-ef52-4743-8dd0-534d344a2d11"
+          deviceInfo:
+            type: string
+            example: "console spirit F85 firmware_version=1.0.2"
+          sessionId:
+            type: string
+            required: false
+            description: Session ID (required for authenticated endpoints)
+
+paths:
+  /LoginMachineByQRCode:
+    post:
+      summary: Machine Console QR Code Login
+      description: |
+        Console continuously polls this API with generated QR code to get scanning user's information.
+        
+        **Prerequisites:**
+        1. Console generates QR code using format: `{machineConsoleUuid}#{model_name}#{brand_code}#{random_code}#{mac_address}`
+        2. User scans QR code using mobile app
+        3. API returns user information after successful scan
+        
+        **QR Code Example:** `2cd99b06-ef52-4743-8dd0-534d344a2d11#F85#sole#9685#90:09:17:6C:C2:59`
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qrCode]
+              properties:
+                qrCode:
+                  type: string
+                  description: Complete QR code string generated by console
+                  example: "2cd99b06-ef52-4743-8dd0-534d344a2d11#F85#sole#9685#90:09:17:6C:C2:59"
+      responses:
+        '200':
+          description: Successful login or waiting for scan
+          headers:
+            sessionId:
+              schema:
+                type: string
+              description: Session ID for authenticated requests
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LoginResponse'
+                  - $ref: '#/components/schemas/ApiResponse'
+              examples:
+                success:
+                  summary: User scanned QR code successfully
+                  value:
+                    success: true
+                    msg: null
+                    errorMessage: null
+                    errorCode: null
+                    errorUuid: null
+                    dataMap:
+                      data:
+                        userUuid: "01047e81-b21d-4744-9684-44de1030d27c"
+                        displayName: "Allen Tsai"
+                        email: "aaa@gmail.com"
+                        # ... other user profile fields
+                      loginToken: "da33f79d-f1cb-4f83-8ee2-fa8cdddb608a"
+                      serviceLoginToken: "eyJraWQiOiI5YmQ3NGMzYi1..."
+                waiting:
+                  summary: Waiting for user to scan QR code
+                  value:
+                    success: false
+                    errorMessage: "QRCODE_NOT_SCANED_YET(1043)"
+                    errorCode: 1043
+                    errorUuid: "uuid-string-here"
+                    dataMap: null
+
+  /LoginMachineByToken:
+    post:
+      summary: Background Token Login
+      description: Use stored login token for automatic re-authentication when session expires
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [loginToken, machineConsoleUuid]
+              properties:
+                loginToken:
+                  type: string
+                  description: Login token from LoginMachineByQRCode
+                  example: "da33f79d-f1cb-4f83-8ee2-fa8cdddb608a"
+                machineConsoleUuid:
+                  type: string
+                  description: Console UUID (same as used in QR code)
+                  example: "2cd99b06-ef52-4743-8dd0-534d344a2d11"
+      responses:
+        '200':
+          description: Login successful or failed
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/UserInfoResponse'
+                  - $ref: '#/components/schemas/ApiResponse'
+
+  /GetMyUserInfoFromMachine:
+    post:
+      summary: Get Current User Profile
+      description: Retrieve logged-in user's profile information
+      security: [SessionAuth: []]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+      responses:
+        '200':
+          description: User information retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfoResponse'
+
+  /UpdateMyUserInfoFromMachine:
+    post:
+      summary: Update User Profile
+      description: Update user profile information
+      security: [SessionAuth: []]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: User name or nickname
+                  example: "melody"
+                birthDate:
+                  type: string
+                  format: date
+                  description: Date format yyyy-MM-dd
+                  example: "2000-01-30"
+                gender:
+                  $ref: '#/components/schemas/Gender'
+                weight:
+                  type: string
+                  description: Weight in kg
+                  example: "70"
+                height:
+                  type: string
+                  description: Height in cm
+                  example: "175"
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfoResponse'
+
+  /UploadWorkoutFromMachine:
+    post:
+      summary: Upload Workout Data
+      description: Upload workout records from machine console
+      security: [SessionAuth: []]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [form]
+              properties:
+                form:
+                  $ref: '#/components/schemas/UploadWorkoutForm4Machine'
+      responses:
+        '200':
+          description: Workout uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkoutUploadResponse'
+
+  /LogoutMachine:
+    post:
+      summary: Logout from Console
+      description: End user session on machine console
+      security: [SessionAuth: []]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+# Security Schemes
+securityDefinitions:
+  SessionAuth:
+    type: apiKey
+    in: header
+    name: sessionId
